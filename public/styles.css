@@ -136,9 +136,78 @@ label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
 }
 .table.tight td, .table.tight th{ padding:6px 8px; }
 
+/* ===== Login Page (mirip screenshot) ===== */
+#pageLogin{
+  min-height: calc(100vh - 92px);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding: 40px 16px;
+  position: relative;
+  overflow:hidden;
+}
+
+/* background soft blur */
+#pageLogin::before{
+  content:"";
+  position:absolute;
+  inset:-30%;
+  background:
+    radial-gradient(closest-side at 35% 35%, rgba(99,102,241,.18), transparent 65%),
+    radial-gradient(closest-side at 70% 60%, rgba(15,23,42,.10), transparent 60%),
+    radial-gradient(closest-side at 55% 45%, rgba(245,158,11,.10), transparent 60%);
+  filter: blur(18px);
+  pointer-events:none;
+}
+
+/* bikin card login center (tanpa perlu ubah HTML)
+   asumsi isi login ada di dalam #pageLogin .card pertama */
+#pageLogin .card{
+  width: min(520px, 100%);
+  background: rgba(255,255,255,.88);
+  border: 1px solid rgba(0,0,0,.06);
+  border-radius: 18px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.10);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  padding: 22px 22px 18px;
+  margin-top: 0;
+  position:relative;
+  z-index:1;
+}
+
+#pageLogin h2{
+  margin:0;
+  font-size:22px;
+  letter-spacing:.2px;
+}
+#pageLogin .muted{
+  color:#6b7280;
+}
+
+/* tombol login biar pill & dark seperti screenshot */
+#btnLogin.btn.primary{
+  border-color: rgba(2,6,23,.10);
+  background:#0b1220;
+  color:#fff;
+  border-radius:999px;
+  padding:10px 16px;
+  min-width:120px;
+  box-shadow: 0 14px 30px rgba(11,18,32,.18);
+}
+#btnLogin.btn.primary:hover{
+  box-shadow: 0 18px 40px rgba(11,18,32,.22);
+}
+
+/* rapihin checkbox "ingat saya" kalau ada */
+#pageLogin label input[type="checkbox"]{
+  width:16px;height:16px;
+  vertical-align:middle;
+}
+
+/* ===== Print ===== */
 @media print{
   .nav, .viewHeader, #logoLocal, #btnBack { display:none !important; }
   .container{ max-width:none; }
   .card{ box-shadow:none; border:none; }
 }
-
