@@ -105,11 +105,13 @@ $("btnLogin").onclick = async () => {
   try {
     const username = $("loginUser").value.trim();
     const password = $("loginPass").value.trim();
+
     const r = await api("/api/login", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ username, password }),
     });
+
     PIN_TOKEN = "";
     log(r);
     await setLoggedUI(true);
@@ -447,16 +449,11 @@ async function renderBoms() {
     tb.appendChild(tr);
   });
 
-  // VIEW: buka HTML export di tab baru (NO PIN)
+  // VIEW: buka halaman view.html (bukan auto print)
   tb.querySelectorAll("[data-view]").forEach((btn) => {
-    btn.onclick = async () => {
-      try {
-        const bomId = btn.dataset.view;
-        const html = await fetchExportHtml(bomId);
-        openHtmlInNewTab(html);
-      } catch (e) {
-        alert(e.message);
-      }
+    btn.onclick = () => {
+      const bomId = btn.dataset.view;
+      window.open(`/view.html?bom_id=${encodeURIComponent(bomId)}`, "_blank");
     };
   });
 
@@ -465,6 +462,8 @@ async function renderBoms() {
     btn.onclick = async () => {
       await openBom(btn.dataset.open);
       document.querySelector('[data-tab="bom"]')?.click();
+      // simpan state url (opsional)
+      try { history.replaceState({}, "", `/?open_bom=${encodeURIComponent(btn.dataset.open)}`); } catch {}
     };
   });
 
@@ -738,6 +737,18 @@ async function boot() {
 
   if ($("itemInfo")) $("itemInfo").textContent = "";
   if ($("currentBomInfo")) $("currentBomInfo").textContent = "Open BOM dari Dashboard untuk edit/export";
+
+  // ====== Deep link: ?open_bom=ID ======
+  try {
+    const url = new URL(location.href);
+    const openId = url.searchParams.get("open_bom");
+    if (openId) {
+      await openBom(openId);
+      document.querySelector('[data-tab="bom"]')?.click();
+    }
+  } catch (e) {
+    // ignore
+  }
 }
 
 // auto check session
