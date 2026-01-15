@@ -10,12 +10,21 @@ function esc(s) {
   }[m]));
 }
 
-function n0(x){ x = Number(x); return Number.isFinite(x) ? x : 0; }
+function n0(x) {
+  x = Number(x);
+  return Number.isFinite(x) ? x : 0;
+}
 
 function f2(n) {
   n = n0(n);
   return (Math.round(n * 100) / 100).toFixed(2).replace(".", ",");
 }
+
+function f1(n) {
+  n = n0(n);
+  return (Math.round(n * 10) / 10).toFixed(1).replace(".", ",");
+}
+
 function f0(n) {
   n = n0(n);
   return String(Math.round(n)).replace(".", ",");
@@ -156,17 +165,17 @@ export async function onRequestPost({ request, env }) {
     </tr>`;
   }).join("") || `<tr><td class="c">1</td><td>-</td><td class="r">0,00 Btg</td></tr>`;
 
-  // Accessories table
+  // Accessories table (qty 1 angka di belakang koma)
   let raIndex = 1;
   const recapAccessoriesHtml = accLines.map((x) => {
     const a = accMap.get(x.accessory_kode);
     return `<tr>
       <td class="c">${raIndex++}</td>
       <td>(${esc(x.accessory_kode)}) ${esc(a?.nama || "")}</td>
-      <td class="r">${f0(x.qty)}</td>
+      <td class="r">${f1(x.qty)}</td>
       <td class="c">${esc(a?.satuan || "")}</td>
     </tr>`;
-  }).join("") || `<tr><td class="c">1</td><td>-</td><td class="r">0</td><td class="c">-</td></tr>`;
+  }).join("") || `<tr><td class="c">1</td><td>-</td><td class="r">0,0</td><td class="c">-</td></tr>`;
 
   const totalCellFoot = `
     <div class="total3">
