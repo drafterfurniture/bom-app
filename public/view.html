@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>View / Print BOM</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="viewPage">
+  <div class="container">
+
+    <!-- top nav -->
+    <div class="nav">
+      <div class="brand">
+        <div class="b1">BOM App</div>
+        <div class="b2">View / Print BOM</div>
+      </div>
+      <div class="navRight">
+        <a class="btn" href="/#dashboard" id="btnBack">Back</a>
+      </div>
+    </div>
+
+    <!-- header row like your screenshot -->
+    <div class="viewHeader">
+      <h1>View / Print BOM</h1>
+
+      <div class="viewActions">
+        <button class="btn" id="btnEdit">Edit</button>
+        <button class="btn" id="btnPrint">Print</button>
+        <button class="btn primary" id="btnExportPdf">Export PDF</button>
+      </div>
+    </div>
+
+    <!-- content -->
+    <section class="card" id="viewCard">
+      <div class="viewTopRow">
+        <div class="viewLogoBox">
+          <div class="logoPreview" id="logoWrap">
+            <div class="logoPh">LOGO<br/><span class="muted small">(upload)</span></div>
+          </div>
+
+          <div class="muted small" style="margin-top:8px;">
+            (Preview) Upload logo lokal:
+          </div>
+          <input class="input" type="file" id="logoLocal" accept="image/*" />
+        </div>
+
+        <div class="viewCompany">
+          <div class="companyTitle">CV. MANDIRI ABADI</div>
+          <div class="muted">Teak Garden Furniture &amp; Wood Working Industries</div>
+        </div>
+
+        <div class="viewCutBox">
+          <div class="cutTitle">CUTTINGLIST</div>
+          <div class="muted" id="cutDate">-</div>
+          <div class="cutCode" id="cutCode">-</div>
+        </div>
+      </div>
+
+      <div class="hr"></div>
+
+      <div class="viewInfoGrid">
+        <table class="table tight">
+          <tbody>
+            <tr><th style="width:140px;">Kode</th><td id="infoKode">-</td></tr>
+            <tr><th>Nama</th><td id="infoNama">-</td></tr>
+            <tr><th>Dimensi</th><td id="infoDimensi">-</td></tr>
+            <tr><th>Buyer</th><td id="infoBuyer">-</td></tr>
+          </tbody>
+        </table>
+
+        <div class="viewFormula">
+          <div class="muted">Rumus:</div>
+          <div class="muted small">Total M = QTY × PanjangBersih(mm) / 1000</div>
+          <div class="muted small">Batang = TotalM / 6</div>
+        </div>
+      </div>
+
+      <div class="hr"></div>
+
+      <table class="table" id="tblViewLines">
+        <thead>
+          <tr>
+            <th style="width:60px;">NO</th>
+            <th>Nama Komponen</th>
+            <th style="width:260px;">Material</th>
+            <th style="width:80px;">QTY</th>
+            <th style="width:160px;">Panjang Bersih</th>
+            <th style="width:260px;">Total</th>
+            <th style="width:140px;">Panjang Las</th>
+            <th style="width:160px;">Luas Permukaan</th>
+          </tr>
+          <tr>
+            <th></th><th></th><th></th><th></th><th></th>
+            <th>
+              <div class="total3head">
+                <span>M</span><span>Batang</span><span>Berat</span>
+              </div>
+            </th>
+            <th>(cm)</th>
+            <th>(m²)</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+        <tfoot>
+          <tr>
+            <th colspan="3">Total</th>
+            <th class="c" id="tQty">0</th>
+            <th class="r" id="tPanjang">0 mm</th>
+            <th id="tTotalCell">-</th>
+            <th class="r" id="tLas">0 cm</th>
+            <th class="r" id="tLuas">0 m²</th>
+          </tr>
+        </tfoot>
+      </table>
+
+      <div class="hr"></div>
+
+      <div class="viewBottomGrid">
+        <div>
+          <div class="sectionTitle">Rincian Material yang digunakan</div>
+          <table class="table tight" id="tblRecapMat">
+            <thead>
+              <tr><th style="width:60px;">No.</th><th>Material</th><th style="width:140px;">Kebutuhan</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <div class="muted small" style="margin-top:6px;">Kebutuhan batang = Σ(TotalM/6) per material</div>
+        </div>
+
+        <div>
+          <div class="sectionTitle">Aksesoris</div>
+          <table class="table tight" id="tblRecapAcc">
+            <thead>
+              <tr><th style="width:60px;">No.</th><th>Aksesoris</th><th style="width:90px;">Qty</th><th style="width:90px;">Satuan</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+  </div>
+
+  <script src="/view.js"></script>
+</body>
+</html>
