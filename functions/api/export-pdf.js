@@ -42,6 +42,7 @@ export async function onRequestPost({ request, env }) {
   // ==== Parse body ====
   const b = await request.json().catch(() => null);
   const bom_id = Number(b?.bom_id || 0);
+  const mode = (b?.mode === "print" ? "print" : "view"); // default view
   if (!bom_id) return bad("bom_id required", 400);
 
   // ==== Header BOM + item ====
@@ -174,16 +175,22 @@ export async function onRequestPost({ request, env }) {
       <div><b>${f2(tKg)}</b> KG</div>
     </div>`;
 
+  // auto print ONLY on mode print
+  const autoPrint = mode === "print"
+    ? `<script>window.addEventListener("load",()=>{ try{ window.print(); }catch(e){} });</script>`
+    : ``;
+
   // ===== FINAL HTML (A4 + 12mm) =====
   const html = `<!doctype html>
 <html>
 <head>
 <meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>${esc(bom.bom_code)}</title>
 <style>
   @page { size: A4; margin: 12mm; }
   *{ box-sizing:border-box }
-  body{ font-family: Arial, sans-serif; color:#000; font-size:12px; }
+  body{ font-family: Arial, sans-serif; color:#000; font-size:12px; margin:0; padding:0; }
   .row{ display:flex; justify-content:space-between; gap:10mm; align-items:flex-start; }
   .brand{ font-size:18px; font-weight:800; letter-spacing:.2px; }
   .sub{ font-size:12px; margin-top:2px; }
@@ -206,6 +213,11 @@ export async function onRequestPost({ request, env }) {
   .section-title{ font-weight:800; margin:0 0 4px; }
   .note{ margin-top:6px; font-size:11px; }
   tr { break-inside: avoid; }
+
+  /* khusus tampilan di viewer (screen) biar enak */
+  @media screen {
+    body{ padding: 14px; background:#fff; }
+  }
 </style>
 </head>
 <body>
@@ -241,7 +253,7 @@ export async function onRequestPost({ request, env }) {
         </tbody>
       </table>
     </div>
-   <div style="flex:1; padding-top:2px;"></div>
+    <div style="flex:1; padding-top:2px;"></div>
   </div>
 
   <div class="sp12"></div>
@@ -290,7 +302,6 @@ export async function onRequestPost({ request, env }) {
         </thead>
         <tbody>${recapMaterialsHtml}</tbody>
       </table>
-      <div class="note">Kebutuhan batang = Σ(TotalM/6) per material</div>
 
       <div class="sp12"></div>
 
@@ -303,15 +314,10 @@ export async function onRequestPost({ request, env }) {
       </table>
     </div>
 
-    <div style="flex:0.75">
-      <div class="muted">Print-friendly (A4, 12mm)</div>
-      <div class="muted" style="margin-top:6px">Tips: di dialog print pilih “Save as PDF”.</div>
-    </div>
+    <div style="flex:0.75"></div>
   </div>
 
-  <script>
-    window.onload = () => { window.print(); };
-  </script>
+  ${autoPrint}
 </body>
 </html>`;
 
@@ -319,7 +325,7 @@ export async function onRequestPost({ request, env }) {
     headers: {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store",
-      "content-disposition": `inline; filename="${esc(bom.bom_code)}.html"`
-    }
+      "content-disposition": `inline; filename="${esc(bom.bom_code)}.html"`,
+    },
   });
 }
