@@ -24,7 +24,6 @@ async function api(path, opts = {}) {
   }
 
   if (!res.ok) {
-    // prefer error dari JSON {error:"..."}
     const msg =
       (data && typeof data === "object" && data.error) ||
       (typeof data === "string" && data) ||
@@ -54,6 +53,34 @@ async function ensurePin() {
 function pinHeaders() {
   if (!PIN_TOKEN) return {};
   return { "x-pin-token": PIN_TOKEN };
+}
+
+// helper fetch HTML export (no pin)
+async function fetchExportHtml(bomId) {
+  const res = await fetch("/api/export-pdf", {
+    method: "POST",
+    headers: { "content-type": "application/json" }, // TANPA x-pin-token
+    body: JSON.stringify({ bom_id: Number(bomId) }),
+  });
+
+  if (!res.ok) {
+    const ct = res.headers.get("content-type") || "";
+    if (ct.includes("application/json")) {
+      const j = await res.json().catch(() => null);
+      throw new Error(j?.error || `HTTP ${res.status}`);
+    }
+    throw new Error(await res.text());
+  }
+
+  return await res.text();
+}
+
+function openHtmlInNewTab(html) {
+  const w = window.open("", "_blank");
+  if (!w) throw new Error("Popup diblokir browser. Izinkan popups untuk View/Export.");
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
 }
 
 // ====== Tabs ======
@@ -105,7 +132,6 @@ $("btnLogout").onclick = async () => {
 
 $("btnWhoami").onclick = async () => {
   try {
-    // cara cek: coba GET materials -> kalau 401 berarti belum login
     await api("/api/materials");
     alert("Login OK");
     await setLoggedUI(true);
@@ -177,7 +203,7 @@ function renderMaterialsTable() {
           method: "DELETE",
           headers: { ...pinHeaders() },
         });
-        PIN_TOKEN = ""; // one-time
+        PIN_TOKEN = "";
         await loadMaterials();
         renderMaterialsTable();
         log("deleted material " + b.dataset.del);
@@ -413,6 +439,7 @@ async function renderBoms() {
       <td>${b.buyer}</td>
       <td>${b.created_at}</td>
       <td>
+        <button class="btn" data-view="${b.id}">View</button>
         <button class="btn" data-open="${b.id}">Open</button>
         <button class="btn danger" data-del="${b.id}">Delete</button>
       </td>
@@ -420,18 +447,33 @@ async function renderBoms() {
     tb.appendChild(tr);
   });
 
-  tb.querySelectorAll("[data-open]").forEach((b) => {
-    b.onclick = async () => {
-      await openBom(b.dataset.open);
+  // VIEW: buka HTML export di tab baru (NO PIN)
+  tb.querySelectorAll("[data-view]").forEach((btn) => {
+    btn.onclick = async () => {
+      try {
+        const bomId = btn.dataset.view;
+        const html = await fetchExportHtml(bomId);
+        openHtmlInNewTab(html);
+      } catch (e) {
+        alert(e.message);
+      }
+    };
+  });
+
+  // OPEN: masuk ke tab BOM editor
+  tb.querySelectorAll("[data-open]").forEach((btn) => {
+    btn.onclick = async () => {
+      await openBom(btn.dataset.open);
       document.querySelector('[data-tab="bom"]')?.click();
     };
   });
 
-  tb.querySelectorAll("[data-del]").forEach((b) => {
-    b.onclick = async () => {
+  // DELETE: butuh PIN
+  tb.querySelectorAll("[data-del]").forEach((btn) => {
+    btn.onclick = async () => {
       try {
         await ensurePin();
-        await api(`/api/boms?id=${encodeURIComponent(b.dataset.del)}`, {
+        await api(`/api/boms?id=${encodeURIComponent(btn.dataset.del)}`, {
           method: "DELETE",
           headers: { ...pinHeaders() },
         });
@@ -443,7 +485,7 @@ async function renderBoms() {
     };
   });
 
-  $("bomsInfo").textContent = `${rows.length} BOM`;
+  if ($("bomsInfo")) $("bomsInfo").textContent = `${rows.length} BOM`;
 }
 
 $("btnRefreshBoms").onclick = () => renderBoms();
@@ -451,19 +493,24 @@ $("btnRefreshBoms").onclick = () => renderBoms();
 // ====== BOM editor ======
 function makeMaterialOptions(selected = "") {
   if (!MATERIALS.length) return `<option value="">(material kosong)</option>`;
-  return MATERIALS.map((m) => {
-    const v = m.kode;
-    const label = `(${m.kode}) ${m.deskripsi}`;
-    const sel = v === selected ? "selected" : "";
-    return `<option value="${v}" ${sel}>${label}</option>`;
-  }).join("");
+  return MATERIALS
+    .map((m) => {
+      const v = m.kode;
+      const label = `(${m.kode}) ${m.deskripsi}`;
+      const sel = v === selected ? "selected" : "";
+      return `<option value="${v}" ${sel}>${label}</option>`;
+    })
+    .join("");
 }
+
 function makeAccessoryOptions(selected = "") {
   if (!ACCESSORIES.length) return `<option value="">(aksesoris kosong)</option>`;
-  return ACCESSORIES.map((a) => {
-    const sel = a.kode === selected ? "selected" : "";
-    return `<option value="${a.kode}" ${sel}>(${a.kode}) ${a.nama}</option>`;
-  }).join("");
+  return ACCESSORIES
+    .map((a) => {
+      const sel = a.kode === selected ? "selected" : "";
+      return `<option value="${a.kode}" ${sel}>(${a.kode}) ${a.nama}</option>`;
+    })
+    .join("");
 }
 
 function addLineRow(line = {}) {
@@ -508,7 +555,6 @@ function addAccRow(x = {}) {
   renumberTable("tblAcc");
 }
 
-// renumber: set line_no berdasarkan urutan row (lebih stabil)
 function renumberTable(tblId) {
   const tb = $(tblId)?.querySelector("tbody");
   if (!tb) return;
@@ -539,7 +585,6 @@ async function openBom(id) {
   $("currentBomId").value = r.bom.id;
   $("currentBomInfo").textContent = `${r.bom.bom_code} | ${r.bom.created_at}`;
 
-  // item select match by item_id first (lebih aman), fallback by kode
   if (r.bom.item_id) {
     $("selItem").value = r.bom.item_id;
   } else {
@@ -548,12 +593,10 @@ async function openBom(id) {
   }
   $("selItem").dispatchEvent(new Event("change"));
 
-  // render lines
   const tbL = $("tblLines").querySelector("tbody");
   tbL.innerHTML = "";
   (r.lines || []).forEach(addLineRow);
 
-  // render accessories
   const tbA = $("tblAcc").querySelector("tbody");
   tbA.innerHTML = "";
   (r.accessories || []).forEach(addAccRow);
@@ -565,31 +608,27 @@ function collectLines() {
   const tb = $("tblLines")?.querySelector("tbody");
   if (!tb) return [];
 
-  return [...tb.children].map((tr) => {
-    return {
-      line_no: Number(tr.querySelector("input.lineNo")?.value || 0),
-      nama_komponen: (tr.querySelector("input.compName")?.value || "").trim(),
-      material_kode: tr.querySelector("select.matSel")?.value || "",
-      qty: Number(tr.querySelector("input.qty")?.value || 0),
-      panjang_mm: Number(tr.querySelector("input.panjang")?.value || 0),
-    };
-  });
+  return [...tb.children].map((tr) => ({
+    line_no: Number(tr.querySelector("input.lineNo")?.value || 0),
+    nama_komponen: (tr.querySelector("input.compName")?.value || "").trim(),
+    material_kode: tr.querySelector("select.matSel")?.value || "",
+    qty: Number(tr.querySelector("input.qty")?.value || 0),
+    panjang_mm: Number(tr.querySelector("input.panjang")?.value || 0),
+  }));
 }
 
 function collectAcc() {
   const tb = $("tblAcc")?.querySelector("tbody");
   if (!tb) return [];
 
-  return [...tb.children].map((tr) => {
-    return {
-      line_no: Number(tr.querySelector("input.lineNo")?.value || 0),
-      accessory_kode: tr.querySelector("select.accSel")?.value || "",
-      qty: Number(tr.querySelector("input.qty")?.value || 0),
-    };
-  });
+  return [...tb.children].map((tr) => ({
+    line_no: Number(tr.querySelector("input.lineNo")?.value || 0),
+    accessory_kode: tr.querySelector("select.accSel")?.value || "",
+    qty: Number(tr.querySelector("input.qty")?.value || 0),
+  }));
 }
 
-// Create BOM
+// Create BOM (PIN)
 $("btnCreateBom").onclick = async () => {
   try {
     await ensurePin();
@@ -610,7 +649,7 @@ $("btnCreateBom").onclick = async () => {
   }
 };
 
-// Update Lines
+// Update Lines (PIN)
 $("btnUpdateLines").onclick = async () => {
   try {
     if (!CURRENT_BOM_ID) return alert("Open BOM dulu dari Dashboard (Open)");
@@ -630,39 +669,17 @@ $("btnUpdateLines").onclick = async () => {
 };
 
 // ====== Export PDF (NO PIN) ======
-// Backend tetap bisa require login via cookie session
 $("btnExport").onclick = async () => {
   try {
     if (!CURRENT_BOM_ID) return alert("Open BOM dulu dari Dashboard (Open)");
-
-    const res = await fetch("/api/export-pdf", {
-      method: "POST",
-      headers: { "content-type": "application/json" }, // TANPA x-pin-token
-      body: JSON.stringify({ bom_id: CURRENT_BOM_ID }),
-    });
-
-    // penting: cek status
-    if (!res.ok) {
-      const ct = res.headers.get("content-type") || "";
-      if (ct.includes("application/json")) {
-        const j = await res.json().catch(() => null);
-        throw new Error(j?.error || `HTTP ${res.status}`);
-      }
-      throw new Error(await res.text());
-    }
-
-    const html = await res.text();
-    const w = window.open("", "_blank");
-    if (!w) throw new Error("Popup diblokir browser. Izinkan popups untuk export PDF.");
-    w.document.open();
-    w.document.write(html);
-    w.document.close();
+    const html = await fetchExportHtml(CURRENT_BOM_ID);
+    openHtmlInNewTab(html);
   } catch (e) {
     alert(e.message);
   }
 };
 
-// Upload logo
+// Upload logo (PIN)
 $("btnUploadLogo").onclick = async () => {
   try {
     const f = $("logoFile").files[0];
@@ -713,15 +730,14 @@ async function boot() {
 
   await renderBoms();
 
-  // init empty lines if none
   const tbL = $("tblLines")?.querySelector("tbody");
   if (tbL && tbL.children.length === 0) addLineRow({ qty: 1, panjang_mm: 0 });
 
   const tbA = $("tblAcc")?.querySelector("tbody");
   if (tbA && tbA.children.length === 0 && ACCESSORIES.length) addAccRow({ qty: 0 });
 
-  $("itemInfo").textContent = "";
-  $("currentBomInfo").textContent = "Open BOM dari Dashboard untuk edit/export";
+  if ($("itemInfo")) $("itemInfo").textContent = "";
+  if ($("currentBomInfo")) $("currentBomInfo").textContent = "Open BOM dari Dashboard untuk edit/export";
 }
 
 // auto check session
