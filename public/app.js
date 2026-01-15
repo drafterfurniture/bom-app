@@ -75,12 +75,174 @@ async function fetchExportHtml(bomId) {
   return await res.text();
 }
 
-function openHtmlInNewTab(html) {
-  const w = window.open("", "_blank");
-  if (!w) throw new Error("Popup diblokir browser. Izinkan popups untuk View/Export.");
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
+// ====== VIEWER (same window) ======
+function ensureViewerUI() {
+  if (document.getElementById("bomViewer")) return;
+
+  const style = document.createElement("style");
+  style.textContent = `
+    #bomViewer{
+      position:fixed; inset:0; z-index:9999;
+      display:none;
+      background: rgba(0,0,0,.55);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      padding: 16px;
+    }
+    #bomViewer .panel{
+      width: min(1100px, 100%);
+      height: calc(100vh - 32px);
+      margin: 0 auto;
+      background:#fff;
+      border-radius: 16px;
+      overflow:hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,.35);
+      display:flex;
+      flex-direction:column;
+    }
+    #bomViewer .topbar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding: 10px 12px;
+      border-bottom:1px solid #eee;
+      background: #fafafa;
+    }
+    #bomViewer .title{
+      font-weight:700;
+      font-size:14px;
+      color:#111;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #bomViewer .btnBack{
+      appearance:none;
+      border:1px solid #e5e5e5;
+      background:#fff;
+      color:#111;
+      padding: 8px 12px;
+      border-radius: 12px;
+      cursor:pointer;
+      font-weight:700;
+      line-height:1;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      box-shadow: 0 6px 18px rgba(0,0,0,.06);
+    }
+    #bomViewer .btnBack:hover{ background:#f6f6f6; }
+    #bomViewer .btnBack:active{ transform: translateY(1px); }
+    #bomViewer .btnBack .arr{
+      width: 22px; height: 22px;
+      border-radius: 999px;
+      background:#111;
+      color:#fff;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      font-weight:900;
+      font-size:14px;
+    }
+    #bomViewer .actions{
+      display:flex; align-items:center; gap:8px;
+    }
+    #bomViewer .btnIcon{
+      appearance:none;
+      border:1px solid #e5e5e5;
+      background:#fff;
+      padding:8px 10px;
+      border-radius:12px;
+      cursor:pointer;
+      font-weight:700;
+      color:#111;
+    }
+    #bomViewer .btnIcon:hover{ background:#f6f6f6; }
+    #bomViewer iframe{
+      width:100%;
+      height:100%;
+      border:0;
+      background:#fff;
+      flex:1;
+    }
+
+    @media (max-width: 640px){
+      #bomViewer{ padding:10px; }
+      #bomViewer .panel{ height: calc(100vh - 20px); border-radius: 14px; }
+      #bomViewer .title{ display:none; }
+    }
+  `;
+  document.head.appendChild(style);
+
+  const wrap = document.createElement("div");
+  wrap.id = "bomViewer";
+  wrap.innerHTML = `
+    <div class="panel">
+      <div class="topbar">
+        <button class="btnBack" id="btnViewerBack" type="button">
+          <span class="arr">←</span>
+          <span>Back</span>
+        </button>
+        <div class="title" id="viewerTitle">View / Print BOM</div>
+        <div class="actions">
+          <button class="btnIcon" id="btnViewerPrint" type="button">Print</button>
+          <button class="btnIcon" id="btnViewerClose" type="button">Close</button>
+        </div>
+      </div>
+      <iframe id="viewerFrame" title="BOM Viewer"></iframe>
+    </div>
+  `;
+  document.body.appendChild(wrap);
+
+  const close = () => hideViewer();
+
+  $("#btnViewerBack").onclick = close;
+  $("#btnViewerClose").onclick = close;
+
+  // click area gelap untuk close
+  wrap.addEventListener("click", (e) => {
+    if (e.target === wrap) close();
+  });
+
+  // ESC untuk close
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") hideViewer();
+  });
+
+  $("#btnViewerPrint").onclick = () => {
+    const iframe = $("#viewerFrame");
+    // print dari iframe
+    try {
+      iframe?.contentWindow?.focus();
+      iframe?.contentWindow?.print();
+    } catch {
+      alert("Tidak bisa print dari viewer (kemungkinan diblokir). Coba tombol Print di browser.");
+    }
+  };
+}
+
+function showViewer(html, title = "View / Print BOM") {
+  ensureViewerUI();
+  const wrap = $("#bomViewer");
+  const iframe = $("#viewerFrame");
+  const t = $("#viewerTitle");
+  if (t) t.textContent = title;
+
+  // inject HTML via srcdoc
+  iframe.srcdoc = html;
+
+  wrap.style.display = "block";
+  document.body.style.overflow = "hidden";
+}
+
+function hideViewer() {
+  const wrap = $("#bomViewer");
+  const iframe = $("#viewerFrame");
+  if (!wrap) return;
+  wrap.style.display = "none";
+  document.body.style.overflow = "";
+  if (iframe) iframe.srcdoc = ""; // bersihin biar ringan
 }
 
 // ====== Tabs ======
@@ -105,13 +267,11 @@ $("btnLogin").onclick = async () => {
   try {
     const username = $("loginUser").value.trim();
     const password = $("loginPass").value.trim();
-
     const r = await api("/api/login", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ username, password }),
     });
-
     PIN_TOKEN = "";
     log(r);
     await setLoggedUI(true);
@@ -449,11 +609,16 @@ async function renderBoms() {
     tb.appendChild(tr);
   });
 
-  // VIEW: buka halaman view.html (bukan auto print)
+  // VIEW: buka HTML export di viewer overlay (NO PIN)
   tb.querySelectorAll("[data-view]").forEach((btn) => {
-    btn.onclick = () => {
-      const bomId = btn.dataset.view;
-      window.open(`/view.html?bom_id=${encodeURIComponent(bomId)}`, "_blank");
+    btn.onclick = async () => {
+      try {
+        const bomId = btn.dataset.view;
+        const html = await fetchExportHtml(bomId);
+        showViewer(html, "View / Print BOM");
+      } catch (e) {
+        alert(e.message);
+      }
     };
   });
 
@@ -462,8 +627,6 @@ async function renderBoms() {
     btn.onclick = async () => {
       await openBom(btn.dataset.open);
       document.querySelector('[data-tab="bom"]')?.click();
-      // simpan state url (opsional)
-      try { history.replaceState({}, "", `/?open_bom=${encodeURIComponent(btn.dataset.open)}`); } catch {}
     };
   });
 
@@ -667,12 +830,12 @@ $("btnUpdateLines").onclick = async () => {
   }
 };
 
-// ====== Export PDF (NO PIN) ======
+// Export PDF/View (NO PIN) -> viewer overlay
 $("btnExport").onclick = async () => {
   try {
     if (!CURRENT_BOM_ID) return alert("Open BOM dulu dari Dashboard (Open)");
     const html = await fetchExportHtml(CURRENT_BOM_ID);
-    openHtmlInNewTab(html);
+    showViewer(html, "View / Print BOM");
   } catch (e) {
     alert(e.message);
   }
@@ -737,18 +900,6 @@ async function boot() {
 
   if ($("itemInfo")) $("itemInfo").textContent = "";
   if ($("currentBomInfo")) $("currentBomInfo").textContent = "Open BOM dari Dashboard untuk edit/export";
-
-  // ====== Deep link: ?open_bom=ID ======
-  try {
-    const url = new URL(location.href);
-    const openId = url.searchParams.get("open_bom");
-    if (openId) {
-      await openBom(openId);
-      document.querySelector('[data-tab="bom"]')?.click();
-    }
-  } catch (e) {
-    // ignore
-  }
 }
 
 // auto check session
