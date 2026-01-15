@@ -55,12 +55,12 @@ function pinHeaders() {
   return { "x-pin-token": PIN_TOKEN };
 }
 
-// helper fetch HTML export (no pin)
-async function fetchExportHtml(bomId) {
+// helper fetch HTML export (no pin) + mode view/print
+async function fetchExportHtml(bomId, mode = "view") {
   const res = await fetch("/api/export-pdf", {
     method: "POST",
     headers: { "content-type": "application/json" }, // TANPA x-pin-token
-    body: JSON.stringify({ bom_id: Number(bomId) }),
+    body: JSON.stringify({ bom_id: Number(bomId), mode }), // <-- penting
   });
 
   if (!res.ok) {
@@ -112,7 +112,7 @@ function injectViewerStylesOnce() {
       background: #fafafa;
     }
     #bomViewer .title{
-      font-weight:700;
+      font-weight:800;
       font-size:14px;
       color:#111;
       white-space:nowrap;
@@ -121,25 +121,26 @@ function injectViewerStylesOnce() {
       flex:1;
       text-align:center;
     }
+    /* Back button lebih enak dilihat */
     #bomViewer .btnBack{
       appearance:none;
-      border:1px solid #e5e5e5;
-      background:#fff;
+      border:1px solid #e7e7e7;
+      background: linear-gradient(#fff, #fafafa);
       color:#111;
-      padding: 8px 12px;
-      border-radius: 12px;
+      padding: 9px 12px;
+      border-radius: 14px;
       cursor:pointer;
-      font-weight:700;
+      font-weight:800;
       line-height:1;
       display:inline-flex;
       align-items:center;
-      gap:8px;
-      box-shadow: 0 6px 18px rgba(0,0,0,.06);
+      gap:10px;
+      box-shadow: 0 10px 26px rgba(0,0,0,.10);
     }
-    #bomViewer .btnBack:hover{ background:#f6f6f6; }
+    #bomViewer .btnBack:hover{ background: linear-gradient(#fff, #f4f4f4); }
     #bomViewer .btnBack:active{ transform: translateY(1px); }
     #bomViewer .btnBack .arr{
-      width: 22px; height: 22px;
+      width: 26px; height: 26px;
       border-radius: 999px;
       background:#111;
       color:#fff;
@@ -154,13 +155,14 @@ function injectViewerStylesOnce() {
     }
     #bomViewer .btnIcon{
       appearance:none;
-      border:1px solid #e5e5e5;
+      border:1px solid #e7e7e7;
       background:#fff;
-      padding:8px 10px;
-      border-radius:12px;
+      padding:9px 12px;
+      border-radius:14px;
       cursor:pointer;
-      font-weight:700;
+      font-weight:800;
       color:#111;
+      box-shadow: 0 10px 26px rgba(0,0,0,.08);
     }
     #bomViewer .btnIcon:hover{ background:#f6f6f6; }
     #bomViewer iframe{
@@ -181,12 +183,10 @@ function injectViewerStylesOnce() {
 }
 
 function ensureViewerUI() {
-  // kalau udah ada dan refs lengkap, return
   if (VIEWER?.wrap && VIEWER?.iframe && VIEWER?.titleEl) return VIEWER;
 
   injectViewerStylesOnce();
 
-  // kalau ada sisa wrap tanpa refs (misal dari versi lama), hapus biar bersih
   const old = document.getElementById("bomViewer");
   if (old) old.remove();
 
@@ -201,27 +201,23 @@ function ensureViewerUI() {
 
   const btnBack = document.createElement("button");
   btnBack.className = "btnBack";
-  btnBack.id = "btnViewerBack";
   btnBack.type = "button";
   btnBack.innerHTML = `<span class="arr">←</span><span>Back</span>`;
 
   const titleEl = document.createElement("div");
   titleEl.className = "title";
-  titleEl.id = "viewerTitle";
-  titleEl.textContent = "View / Print BOM";
+  titleEl.textContent = "View BOM";
 
   const actions = document.createElement("div");
   actions.className = "actions";
 
   const btnPrint = document.createElement("button");
   btnPrint.className = "btnIcon";
-  btnPrint.id = "btnViewerPrint";
   btnPrint.type = "button";
   btnPrint.textContent = "Print";
 
   const btnClose = document.createElement("button");
   btnClose.className = "btnIcon";
-  btnClose.id = "btnViewerClose";
   btnClose.type = "button";
   btnClose.textContent = "Close";
 
@@ -233,7 +229,6 @@ function ensureViewerUI() {
   topbar.appendChild(actions);
 
   const iframe = document.createElement("iframe");
-  iframe.id = "viewerFrame";
   iframe.title = "BOM Viewer";
 
   panel.appendChild(topbar);
@@ -268,7 +263,10 @@ function ensureViewerUI() {
 }
 
 function setIframeHtml(iframe, html) {
-  // prefer srcdoc
+  if (!iframe) return;
+
+  // pastikan iframe sudah attach & punya contentWindow
+  // srcdoc aman di modern browser
   try {
     iframe.srcdoc = html;
     return;
@@ -288,10 +286,9 @@ function setIframeHtml(iframe, html) {
   }
 }
 
-function showViewer(html, title = "View / Print BOM") {
+function showViewer(html, title = "View BOM") {
   const v = ensureViewerUI();
   v.titleEl.textContent = title;
-
   setIframeHtml(v.iframe, html);
 
   v.wrap.style.display = "block";
@@ -303,6 +300,7 @@ function hideViewer() {
   if (!v?.wrap) return;
   v.wrap.style.display = "none";
   document.body.style.overflow = "";
+
   // bersihin konten biar ringan
   try {
     v.iframe.srcdoc = "";
@@ -680,18 +678,20 @@ async function renderBoms() {
     tb.appendChild(tr);
   });
 
+  // VIEW: overlay same window, mode=view (no auto print)
   tb.querySelectorAll("[data-view]").forEach((btn) => {
     btn.onclick = async () => {
       try {
         const bomId = btn.dataset.view;
-        const html = await fetchExportHtml(bomId);
-        showViewer(html, "View / Print BOM");
+        const html = await fetchExportHtml(bomId, "view");
+        showViewer(html, "View BOM");
       } catch (e) {
         alert(e.message);
       }
     };
   });
 
+  // OPEN: masuk ke tab BOM editor
   tb.querySelectorAll("[data-open]").forEach((btn) => {
     btn.onclick = async () => {
       await openBom(btn.dataset.open);
@@ -699,6 +699,7 @@ async function renderBoms() {
     };
   });
 
+  // DELETE: butuh PIN
   tb.querySelectorAll("[data-del]").forEach((btn) => {
     btn.onclick = async () => {
       try {
@@ -899,11 +900,12 @@ $("btnUpdateLines").onclick = async () => {
 };
 
 // Export PDF/View (NO PIN) -> viewer overlay
+// NOTE: ini sekarang buka view clean, user klik Print kalau mau PDF
 $("btnExport").onclick = async () => {
   try {
     if (!CURRENT_BOM_ID) return alert("Open BOM dulu dari Dashboard (Open)");
-    const html = await fetchExportHtml(CURRENT_BOM_ID);
-    showViewer(html, "View / Print BOM");
+    const html = await fetchExportHtml(CURRENT_BOM_ID, "view");
+    showViewer(html, "View BOM");
   } catch (e) {
     alert(e.message);
   }
@@ -948,7 +950,7 @@ $("btnRefreshItems").onclick = async () => {
 };
 
 async function boot() {
-  // bikin viewer sejak awal biar aman (fix error null)
+  // bikin viewer sejak awal biar stabil
   ensureViewerUI();
 
   await loadMaterials();
