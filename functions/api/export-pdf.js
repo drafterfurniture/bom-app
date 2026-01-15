@@ -241,11 +241,7 @@ export async function onRequestPost({ request, env }) {
         </tbody>
       </table>
     </div>
-    <div style="flex:1; padding-top:2px;">
-      <div class="muted">Rumus:</div>
-      <div class="muted">Total M = QTY × PanjangBersih(mm) / 1000</div>
-      <div class="muted">Batang = TotalM / 6</div>
-    </div>
+   <div style="flex:1; padding-top:2px;"></div>
   </div>
 
   <div class="sp12"></div>
