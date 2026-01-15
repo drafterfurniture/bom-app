@@ -76,10 +76,12 @@ async function fetchExportHtml(bomId) {
 }
 
 // ====== VIEWER (same window) ======
-function ensureViewerUI() {
-  if (document.getElementById("bomViewer")) return;
+let VIEWER = null;
 
+function injectViewerStylesOnce() {
+  if (document.getElementById("bomViewerStyle")) return;
   const style = document.createElement("style");
+  style.id = "bomViewerStyle";
   style.textContent = `
     #bomViewer{
       position:fixed; inset:0; z-index:9999;
@@ -116,6 +118,8 @@ function ensureViewerUI() {
       white-space:nowrap;
       overflow:hidden;
       text-overflow:ellipsis;
+      flex:1;
+      text-align:center;
     }
     #bomViewer .btnBack{
       appearance:none;
@@ -174,75 +178,142 @@ function ensureViewerUI() {
     }
   `;
   document.head.appendChild(style);
+}
+
+function ensureViewerUI() {
+  // kalau udah ada dan refs lengkap, return
+  if (VIEWER?.wrap && VIEWER?.iframe && VIEWER?.titleEl) return VIEWER;
+
+  injectViewerStylesOnce();
+
+  // kalau ada sisa wrap tanpa refs (misal dari versi lama), hapus biar bersih
+  const old = document.getElementById("bomViewer");
+  if (old) old.remove();
 
   const wrap = document.createElement("div");
   wrap.id = "bomViewer";
-  wrap.innerHTML = `
-    <div class="panel">
-      <div class="topbar">
-        <button class="btnBack" id="btnViewerBack" type="button">
-          <span class="arr">←</span>
-          <span>Back</span>
-        </button>
-        <div class="title" id="viewerTitle">View / Print BOM</div>
-        <div class="actions">
-          <button class="btnIcon" id="btnViewerPrint" type="button">Print</button>
-          <button class="btnIcon" id="btnViewerClose" type="button">Close</button>
-        </div>
-      </div>
-      <iframe id="viewerFrame" title="BOM Viewer"></iframe>
-    </div>
-  `;
+
+  const panel = document.createElement("div");
+  panel.className = "panel";
+
+  const topbar = document.createElement("div");
+  topbar.className = "topbar";
+
+  const btnBack = document.createElement("button");
+  btnBack.className = "btnBack";
+  btnBack.id = "btnViewerBack";
+  btnBack.type = "button";
+  btnBack.innerHTML = `<span class="arr">←</span><span>Back</span>`;
+
+  const titleEl = document.createElement("div");
+  titleEl.className = "title";
+  titleEl.id = "viewerTitle";
+  titleEl.textContent = "View / Print BOM";
+
+  const actions = document.createElement("div");
+  actions.className = "actions";
+
+  const btnPrint = document.createElement("button");
+  btnPrint.className = "btnIcon";
+  btnPrint.id = "btnViewerPrint";
+  btnPrint.type = "button";
+  btnPrint.textContent = "Print";
+
+  const btnClose = document.createElement("button");
+  btnClose.className = "btnIcon";
+  btnClose.id = "btnViewerClose";
+  btnClose.type = "button";
+  btnClose.textContent = "Close";
+
+  actions.appendChild(btnPrint);
+  actions.appendChild(btnClose);
+
+  topbar.appendChild(btnBack);
+  topbar.appendChild(titleEl);
+  topbar.appendChild(actions);
+
+  const iframe = document.createElement("iframe");
+  iframe.id = "viewerFrame";
+  iframe.title = "BOM Viewer";
+
+  panel.appendChild(topbar);
+  panel.appendChild(iframe);
+  wrap.appendChild(panel);
   document.body.appendChild(wrap);
 
   const close = () => hideViewer();
 
-  $("#btnViewerBack").onclick = close;
-  $("#btnViewerClose").onclick = close;
+  btnBack.onclick = close;
+  btnClose.onclick = close;
 
-  // click area gelap untuk close
   wrap.addEventListener("click", (e) => {
     if (e.target === wrap) close();
   });
 
-  // ESC untuk close
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") hideViewer();
   });
 
-  $("#btnViewerPrint").onclick = () => {
-    const iframe = $("#viewerFrame");
-    // print dari iframe
+  btnPrint.onclick = () => {
     try {
-      iframe?.contentWindow?.focus();
-      iframe?.contentWindow?.print();
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
     } catch {
-      alert("Tidak bisa print dari viewer (kemungkinan diblokir). Coba tombol Print di browser.");
+      alert("Tidak bisa print dari viewer. Coba gunakan Print dari browser.");
     }
   };
+
+  VIEWER = { wrap, iframe, titleEl };
+  return VIEWER;
+}
+
+function setIframeHtml(iframe, html) {
+  // prefer srcdoc
+  try {
+    iframe.srcdoc = html;
+    return;
+  } catch {
+    // fallback ke write()
+  }
+
+  try {
+    const doc = iframe.contentWindow?.document;
+    if (!doc) throw new Error("no iframe document");
+    doc.open();
+    doc.write(html);
+    doc.close();
+  } catch (e) {
+    console.error(e);
+    alert("Gagal render view. Coba refresh halaman.");
+  }
 }
 
 function showViewer(html, title = "View / Print BOM") {
-  ensureViewerUI();
-  const wrap = $("#bomViewer");
-  const iframe = $("#viewerFrame");
-  const t = $("#viewerTitle");
-  if (t) t.textContent = title;
+  const v = ensureViewerUI();
+  v.titleEl.textContent = title;
 
-  // inject HTML via srcdoc
-  iframe.srcdoc = html;
+  setIframeHtml(v.iframe, html);
 
-  wrap.style.display = "block";
+  v.wrap.style.display = "block";
   document.body.style.overflow = "hidden";
 }
 
 function hideViewer() {
-  const wrap = $("#bomViewer");
-  const iframe = $("#viewerFrame");
-  if (!wrap) return;
-  wrap.style.display = "none";
+  const v = VIEWER;
+  if (!v?.wrap) return;
+  v.wrap.style.display = "none";
   document.body.style.overflow = "";
-  if (iframe) iframe.srcdoc = ""; // bersihin biar ringan
+  // bersihin konten biar ringan
+  try {
+    v.iframe.srcdoc = "";
+  } catch {
+    try {
+      const doc = v.iframe.contentWindow?.document;
+      doc?.open();
+      doc?.write("");
+      doc?.close();
+    } catch {}
+  }
 }
 
 // ====== Tabs ======
@@ -609,7 +680,6 @@ async function renderBoms() {
     tb.appendChild(tr);
   });
 
-  // VIEW: buka HTML export di viewer overlay (NO PIN)
   tb.querySelectorAll("[data-view]").forEach((btn) => {
     btn.onclick = async () => {
       try {
@@ -622,7 +692,6 @@ async function renderBoms() {
     };
   });
 
-  // OPEN: masuk ke tab BOM editor
   tb.querySelectorAll("[data-open]").forEach((btn) => {
     btn.onclick = async () => {
       await openBom(btn.dataset.open);
@@ -630,7 +699,6 @@ async function renderBoms() {
     };
   });
 
-  // DELETE: butuh PIN
   tb.querySelectorAll("[data-del]").forEach((btn) => {
     btn.onclick = async () => {
       try {
@@ -880,6 +948,9 @@ $("btnRefreshItems").onclick = async () => {
 };
 
 async function boot() {
+  // bikin viewer sejak awal biar aman (fix error null)
+  ensureViewerUI();
+
   await loadMaterials();
   renderMaterialsTable();
 
