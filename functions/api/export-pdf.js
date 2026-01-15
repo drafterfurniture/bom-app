@@ -1,77 +1,116 @@
-import { bad, requireUser, requirePin } from "./_utils.js";
+import { bad, requireUser } from "./_utils.js";
 
-function esc(s){ return String(s||"").replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m])); }
-function f2(n){ return (Math.round(n*100)/100).toFixed(2).replace(".",","); }
-function f0(n){ return String(Math.round(n)).replace(".",","); }
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (m) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  }[m]));
+}
 
-export async function onRequestPost({ request, env }){
+function n0(x){ x = Number(x); return Number.isFinite(x) ? x : 0; }
+
+function f2(n) {
+  n = n0(n);
+  return (Math.round(n * 100) / 100).toFixed(2).replace(".", ",");
+}
+function f0(n) {
+  n = n0(n);
+  return String(Math.round(n)).replace(".", ",");
+}
+
+/** bytes -> base64 (aman untuk ukuran besar) */
+function bytesToBase64(bytes) {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+export async function onRequestPost({ request, env }) {
+  // ==== Auth session (tetap wajib login) ====
   const user = await requireUser(request, env);
-  if(!user) return bad("Unauthorized", 401);
+  if (!user) return bad("Unauthorized", 401);
 
-  const pinOK = await requirePin(request, env, user.user_id);
-  if(!pinOK) return bad("PIN required", 403);
+  const db = env.BOM_DB;
+  if (!db) return bad("D1 binding missing (BOM_DB)", 500);
 
-  const b = await request.json().catch(()=>null);
-  const bom_id = Number(b?.bom_id||0);
-  if(!bom_id) return bad("bom_id required");
+  // ==== Parse body ====
+  const b = await request.json().catch(() => null);
+  const bom_id = Number(b?.bom_id || 0);
+  if (!bom_id) return bad("bom_id required", 400);
 
-  // Header BOM + item
-  const bom = await env.BOM_DB.prepare(
+  // ==== Header BOM + item ====
+  const bom = await db.prepare(
     `SELECT b.id, b.bom_code, b.created_at,
-            i.kode item_kode, i.nama item_nama, i.dimensi, i.buyer
+            i.kode AS item_kode, i.nama AS item_nama, i.dimensi, i.buyer
      FROM boms b
      JOIN items i ON i.id=b.item_id
      WHERE b.id=?`
   ).bind(bom_id).first();
-  if(!bom) return bad("Not found", 404);
 
-  // Lines
-  const lines = (await env.BOM_DB.prepare(
+  if (!bom) return bad("Not found", 404);
+
+  // ==== Lines ====
+  const lines = (await db.prepare(
     "SELECT line_no, nama_komponen, material_kode, qty, panjang_mm FROM bom_lines WHERE bom_id=? ORDER BY line_no"
-  ).bind(bom_id).all()).results;
+  ).bind(bom_id).all()).results || [];
 
-  // Accessories lines
-  const accLines = (await env.BOM_DB.prepare(
+  // ==== Accessories lines ====
+  const accLines = (await db.prepare(
     "SELECT line_no, accessory_kode, qty FROM bom_accessories WHERE bom_id=? ORDER BY line_no"
-  ).bind(bom_id).all()).results;
+  ).bind(bom_id).all()).results || [];
 
-  // Master tables
-  const mats = (await env.BOM_DB.prepare(
+  // ==== Master tables ====
+  const mats = (await db.prepare(
     "SELECT kode, deskripsi, berat_per_meter, luas_per_meter, panjang_las FROM materials"
-  ).all()).results;
-  const matMap = new Map(mats.map(x=>[x.kode,x]));
+  ).all()).results || [];
+  const matMap = new Map(mats.map((x) => [x.kode, x]));
 
-  const accs = (await env.BOM_DB.prepare(
+  const accs = (await db.prepare(
     "SELECT kode, nama, satuan FROM accessories"
-  ).all()).results;
-  const accMap = new Map(accs.map(x=>[x.kode,x]));
+  ).all()).results || [];
+  const accMap = new Map(accs.map((x) => [x.kode, x]));
 
-  // Logo from R2 -> dataURL
-  const logoKeyRow = await env.BOM_DB.prepare("SELECT value FROM settings WHERE key='logo_key'").first();
+  // ==== Logo from R2 -> dataURL (AMAN) ====
   let logoDataUrl = "";
-  if(logoKeyRow?.value){
-    const obj = await env.BOM_R2.get(logoKeyRow.value);
-    if(obj){
-      const bytes = new Uint8Array(await obj.arrayBuffer());
-      const b64 = btoa(String.fromCharCode(...bytes));
-      const type = obj.httpMetadata?.contentType || "image/png";
-      logoDataUrl = `data:${type};base64,${b64}`;
+  try {
+    const logoKeyRow = await db.prepare(
+      "SELECT value FROM settings WHERE key='logo_key'"
+    ).first();
+
+    if (logoKeyRow?.value && env.BOM_R2) {
+      const obj = await env.BOM_R2.get(logoKeyRow.value);
+      if (obj) {
+        const buf = await obj.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        const b64 = bytesToBase64(bytes);
+        const type = obj.httpMetadata?.contentType || "image/png";
+        logoDataUrl = `data:${type};base64,${b64}`;
+      }
     }
+  } catch (_) {
+    logoDataUrl = "";
   }
 
-  // Totals + recap material per kode
-  let tQty=0, tPanjang=0, tM=0, tBtg=0, tKg=0, tLas=0, tLuas=0;
+  // ==== Totals + recap material per kode ====
+  let tQty = 0, tPanjang = 0, tM = 0, tBtg = 0, tKg = 0, tLas = 0, tLuas = 0;
   const recapMatM = new Map(); // kode -> totalM
 
-  const rowsHtml = lines.map(l=>{
+  const rowsHtml = lines.map((l) => {
     const m = matMap.get(l.material_kode);
-    const qty = Number(l.qty||0);
-    const panjang = Number(l.panjang_mm||0);
+    const qty = n0(l.qty);
+    const panjang = n0(l.panjang_mm);
+
     const totalM = (qty * panjang) / 1000;
     const btg = totalM / 6;
-    const kg = m ? totalM * Number(m.berat_per_meter||0) : 0;
-    const las = m ? qty * Number(m.panjang_las||0) : 0;
-    const luas = m ? totalM * Number(m.luas_per_meter||0) : 0;
+    const kg = m ? totalM * n0(m.berat_per_meter) : 0;
+    const las = m ? qty * n0(m.panjang_las) : 0;
+    const luas = m ? totalM * n0(m.luas_per_meter) : 0;
 
     tQty += qty;
     tPanjang += qty * panjang;
@@ -81,8 +120,8 @@ export async function onRequestPost({ request, env }){
     tLas += las;
     tLuas += luas;
 
-    if(l.material_kode){
-      recapMatM.set(l.material_kode, (recapMatM.get(l.material_kode)||0) + totalM);
+    if (l.material_kode) {
+      recapMatM.set(l.material_kode, (recapMatM.get(l.material_kode) || 0) + totalM);
     }
 
     const totalCell = `
@@ -93,11 +132,11 @@ export async function onRequestPost({ request, env }){
       </div>`;
 
     return `<tr>
-      <td class="c">${l.line_no}</td>
+      <td class="c">${esc(l.line_no)}</td>
       <td>${esc(l.nama_komponen)}</td>
-      <td>(${esc(l.material_kode)}) ${esc(m?.deskripsi||"")}</td>
-      <td class="c">${qty}</td>
-      <td class="r">${panjang} mm</td>
+      <td>(${esc(l.material_kode)}) ${esc(m?.deskripsi || "")}</td>
+      <td class="c">${f0(qty)}</td>
+      <td class="r">${f0(panjang)} mm</td>
       <td>${totalCell}</td>
       <td class="r">${f0(las)} cm</td>
       <td class="r">${f2(luas)} m²</td>
@@ -105,26 +144,26 @@ export async function onRequestPost({ request, env }){
   }).join("");
 
   // Recap Materials table
-  let rmIndex=1;
-  const recapMaterialsHtml = [...recapMatM.entries()].map(([kode, totalM])=>{
+  let rmIndex = 1;
+  const recapMaterialsHtml = [...recapMatM.entries()].map(([kode, totalM]) => {
     const m = matMap.get(kode);
     const btgNeed = totalM / 6;
     return `<tr>
       <td class="c">${rmIndex++}</td>
-      <td>(${esc(kode)}) ${esc(m?.deskripsi||"")}</td>
+      <td>(${esc(kode)}) ${esc(m?.deskripsi || "")}</td>
       <td class="r">${f2(btgNeed)} Btg</td>
     </tr>`;
   }).join("") || `<tr><td class="c">1</td><td>-</td><td class="r">0,00 Btg</td></tr>`;
 
   // Accessories table
-  let raIndex=1;
-  const recapAccessoriesHtml = accLines.map(x=>{
+  let raIndex = 1;
+  const recapAccessoriesHtml = accLines.map((x) => {
     const a = accMap.get(x.accessory_kode);
     return `<tr>
       <td class="c">${raIndex++}</td>
-      <td>(${esc(x.accessory_kode)}) ${esc(a?.nama||"")}</td>
-      <td class="r">${Number(x.qty||0)}</td>
-      <td class="c">${esc(a?.satuan||"")}</td>
+      <td>(${esc(x.accessory_kode)}) ${esc(a?.nama || "")}</td>
+      <td class="r">${f0(x.qty)}</td>
+      <td class="c">${esc(a?.satuan || "")}</td>
     </tr>`;
   }).join("") || `<tr><td class="c">1</td><td>-</td><td class="r">0</td><td class="c">-</td></tr>`;
 
@@ -152,12 +191,11 @@ export async function onRequestPost({ request, env }){
   .cutbox{ border:1px solid #333; padding:8px 12px; min-width:70mm; }
   .cutbox .t{ font-size:18px; font-weight:900; }
   .muted{ color:#111; font-size:12px; }
-  .sp8{ height:8px; }
   .sp10{ height:10px; }
   .sp12{ height:12px; }
 
   table{ width:100%; border-collapse:collapse; }
-  th,td{ border:1px solid #333; padding:6px; vertical-align:top; }
+  th,td{ border:1px solid #333; padding:6px; vertical-align:top }
   th{ background:#f1f1f1; font-weight:700; }
   .c{ text-align:center; }
   .r{ text-align:right; }
@@ -167,14 +205,16 @@ export async function onRequestPost({ request, env }){
   .total3 > div{ width:33.33%; }
   .section-title{ font-weight:800; margin:0 0 4px; }
   .note{ margin-top:6px; font-size:11px; }
+  tr { break-inside: avoid; }
 </style>
 </head>
 <body>
 
   <div class="row">
     <div style="display:flex; gap:10px;">
-      ${logoDataUrl ? `<img class="logo" src="${logoDataUrl}" alt="Logo"/>`
-                    : `<div class="logo" style="border:1px dashed #777;"></div>`}
+      ${logoDataUrl
+        ? `<img class="logo" src="${logoDataUrl}" alt="Logo"/>`
+        : `<div class="logo" style="border:1px dashed #777;"></div>`}
       <div>
         <div class="brand">CV. MANDIRI ABADI</div>
         <div class="sub">Teak Garden Furniture &amp; Wood Working Industries</div>
@@ -223,21 +263,19 @@ export async function onRequestPost({ request, env }){
         <th style="width:26mm" rowspan="2">Luas Permukaan<br/>(m²)</th>
       </tr>
       <tr>
-        <th>
-          <div class="total3"><div>M</div><div>Batang</div><div>Berat</div></div>
-        </th>
+        <th><div class="total3"><div>M</div><div>Batang</div><div>Berat</div></div></th>
       </tr>
     </thead>
 
     <tbody>
-      ${rowsHtml}
+      ${rowsHtml || ""}
     </tbody>
 
     <tfoot>
       <tr>
         <th colspan="3">Total</th>
-        <th class="c">${tQty}</th>
-        <th class="r">${tPanjang} mm</th>
+        <th class="c">${f0(tQty)}</th>
+        <th class="r">${f0(tPanjang)} mm</th>
         <th>${totalCellFoot}</th>
         <th class="r"><b>${f0(tLas)}</b> cm</th>
         <th class="r"><b>${f2(tLuas)}</b> m²</th>
@@ -254,9 +292,7 @@ export async function onRequestPost({ request, env }){
         <thead>
           <tr><th style="width:10mm">No.</th><th>Material</th><th style="width:32mm">Kebutuhan</th></tr>
         </thead>
-        <tbody>
-          ${recapMaterialsHtml}
-        </tbody>
+        <tbody>${recapMaterialsHtml}</tbody>
       </table>
       <div class="note">Kebutuhan batang = Σ(TotalM/6) per material</div>
 
@@ -267,9 +303,7 @@ export async function onRequestPost({ request, env }){
         <thead>
           <tr><th style="width:10mm">No.</th><th>Aksesoris</th><th style="width:18mm">Qty</th><th style="width:18mm">Satuan</th></tr>
         </thead>
-        <tbody>
-          ${recapAccessoriesHtml}
-        </tbody>
+        <tbody>${recapAccessoriesHtml}</tbody>
       </table>
     </div>
 
@@ -279,14 +313,17 @@ export async function onRequestPost({ request, env }){
     </div>
   </div>
 
-  <script>window.onload=()=>{ window.print(); }</script>
+  <script>
+    window.onload = () => { window.print(); };
+  </script>
 </body>
 </html>`;
 
   return new Response(html, {
-    headers:{
-      "content-type":"text/html; charset=utf-8",
-      "content-disposition": `inline; filename="${bom.bom_code}.html"`
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store",
+      "content-disposition": `inline; filename="${esc(bom.bom_code)}.html"`
     }
   });
 }
