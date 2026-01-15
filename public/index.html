@@ -21,26 +21,42 @@
     </div>
 
     <!-- LOGIN -->
-    <section class="card" id="pageLogin">
-      <h2>Masuk terlebih dulu</h2>
-      <p class="muted">Gunakan ID & password. Aksi sensitif akan minta PIN terpisah.</p>
+    <section class="loginWrap" id="pageLogin">
+      <div class="loginCard">
+        <div class="loginHead">
+          <h2>Masuk terlebih dulu</h2>
+          <p class="muted">Gunakan ID &amp; password yang diberikan.</p>
+        </div>
 
-      <div class="grid2">
-        <div>
+        <div class="loginForm">
           <label>ID</label>
-          <input class="input" id="loginUser" placeholder="MA10" />
-        </div>
-        <div>
-          <label>Password</label>
-          <input class="input" id="loginPass" type="password" placeholder="123456" />
-        </div>
-      </div>
+          <input class="input" id="loginUser" placeholder="MA10" autocomplete="username" />
 
-      <div class="rowBtns">
-        <button class="btn primary" id="btnLogin">Login</button>
-        <button class="btn" id="btnWhoami">Cek Status</button>
+          <div style="height:10px"></div>
+
+          <label>Password</label>
+          <input class="input" id="loginPass" type="password" placeholder="••••••••" autocomplete="current-password" />
+
+          <div class="loginRow">
+            <button class="btn primary loginBtn" id="btnLogin">Login</button>
+
+            <label class="remember">
+              <input type="checkbox" id="rememberMe" />
+              <span>Ingat saya</span>
+            </label>
+          </div>
+
+          <p class="muted small note">
+            Catatan: proteksi ini berjalan di browser (klien). Untuk keamanan penuh, gunakan autentikasi di server.
+          </p>
+
+          <div class="rowBtns" style="margin-top:10px">
+            <button class="btn" id="btnWhoami" type="button">Cek Status</button>
+          </div>
+
+          <div class="muted small" style="margin-top:10px">Demo: MA10 / 123456 | PIN: 1234</div>
+        </div>
       </div>
-      <div class="muted small">Demo: MA10 / 123456 | PIN: 1234</div>
     </section>
 
     <!-- APP -->
@@ -83,7 +99,7 @@
             <button class="btn" id="btnPin">Minta PIN</button>
             <button class="btn primary" id="btnCreateBom">Create BOM</button>
             <button class="btn" id="btnUpdateLines">Update Lines</button>
-            <button class="btn" id="btnExport">Export PDF</button>
+            <button class="btn" id="btnExport">View / Print</button>
           </div>
         </div>
 
