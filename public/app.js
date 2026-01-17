@@ -55,6 +55,23 @@ function pinHeaders() {
   return { "x-pin-token": PIN_TOKEN };
 }
 
+// ====== UI LOGIN/APP (NO RECURSION) ======
+function setLoggedUI(isLogged) {
+  // kalau kamu punya wrapper appWrap (opsional)
+  const wrap = $("appWrap");
+  if (wrap) wrap.classList.toggle("hidden", !isLogged);
+
+  // toggle section login vs app
+  $("pageLogin")?.classList.toggle("hidden", isLogged);
+  $("pageApp")?.classList.toggle("hidden", !isLogged);
+
+  // nav kanan (opsional)
+  const navRight = document.querySelector(".navRight");
+  if (navRight) navRight.style.display = isLogged ? "flex" : "none";
+
+  if ($("pillLogin")) $("pillLogin").textContent = isLogged ? "LOGIN OK" : "LOGOUT";
+}
+
 // helper fetch HTML export (no pin) + mode view/print
 async function fetchExportHtml(bomId, mode = "view") {
   const res = await fetch("/api/export-pdf", {
@@ -73,19 +90,6 @@ async function fetchExportHtml(bomId, mode = "view") {
   }
 
   return await res.text();
-}
-
-// ====== Logged UI (pakai wrapper appWrap) ======
-// index.html kamu sudah inject window.setLoggedUI.
-// Di sini kita PAKAI itu, dan kalau belum ada, fallback.
-async function setLoggedUI(isLogged) {
-  if (typeof window.setLoggedUI === "function") {
-    return window.setLoggedUI(isLogged);
-  }
-  // fallback (kalau index.html belum dipakai)
-  $("pageLogin")?.classList.toggle("hidden", isLogged);
-  $("pageApp")?.classList.toggle("hidden", !isLogged);
-  if ($("pillLogin")) $("pillLogin").textContent = isLogged ? "LOGIN OK" : "LOGOUT";
 }
 
 // ====== VIEWER (same window) ======
@@ -134,7 +138,6 @@ function injectViewerStylesOnce() {
       flex:1;
       text-align:center;
     }
-    /* Back button lebih enak dilihat */
     #bomViewer .btnBack{
       appearance:none;
       border:1px solid #e7e7e7;
@@ -185,7 +188,6 @@ function injectViewerStylesOnce() {
       background:#fff;
       flex:1;
     }
-
     @media (max-width: 640px){
       #bomViewer{ padding:10px; }
       #bomViewer .panel{ height: calc(100vh - 20px); border-radius: 14px; }
@@ -250,7 +252,6 @@ function ensureViewerUI() {
   document.body.appendChild(wrap);
 
   const close = () => hideViewer();
-
   btnBack.onclick = close;
   btnClose.onclick = close;
 
@@ -279,11 +280,9 @@ function setIframeHtml(iframe, html) {
   if (!iframe) return;
 
   try {
-    iframe.srcdoc = html; // utama
+    iframe.srcdoc = html;
     return;
-  } catch {
-    // fallback
-  }
+  } catch {}
 
   try {
     const doc = iframe.contentWindow?.document;
@@ -340,14 +339,17 @@ $("btnLogin")?.addEventListener("click", async () => {
   try {
     const username = $("loginUser").value.trim();
     const password = $("loginPass").value.trim();
+
     const r = await api("/api/login", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ username, password }),
     });
+
     PIN_TOKEN = "";
     log(r);
-    await setLoggedUI(true);
+
+    setLoggedUI(true);
     await boot();
   } catch (e) {
     alert(e.message);
@@ -358,7 +360,7 @@ $("btnLogout")?.addEventListener("click", async () => {
   try {
     await api("/api/logout", { method: "POST" });
     PIN_TOKEN = "";
-    await setLoggedUI(false);
+    setLoggedUI(false);
     log("logout ok");
   } catch (e) {
     alert(e.message);
@@ -369,11 +371,11 @@ $("btnWhoami")?.addEventListener("click", async () => {
   try {
     await api("/api/materials");
     alert("Login OK");
-    await setLoggedUI(true);
+    setLoggedUI(true);
     await boot();
   } catch {
     alert("Belum login / session tidak ada");
-    await setLoggedUI(false);
+    setLoggedUI(false);
   }
 });
 
@@ -682,7 +684,6 @@ async function renderBoms() {
     tb.appendChild(tr);
   });
 
-  // VIEW: overlay same window, mode=view (no auto print)
   tb.querySelectorAll("[data-view]").forEach((btn) => {
     btn.onclick = async () => {
       try {
@@ -695,7 +696,6 @@ async function renderBoms() {
     };
   });
 
-  // OPEN: masuk ke tab BOM editor
   tb.querySelectorAll("[data-open]").forEach((btn) => {
     btn.onclick = async () => {
       await openBom(btn.dataset.open);
@@ -703,7 +703,6 @@ async function renderBoms() {
     };
   });
 
-  // DELETE: butuh PIN
   tb.querySelectorAll("[data-del]").forEach((btn) => {
     btn.onclick = async () => {
       try {
@@ -863,7 +862,6 @@ function collectAcc() {
   }));
 }
 
-// Create BOM (PIN)
 $("btnCreateBom")?.addEventListener("click", async () => {
   try {
     await ensurePin();
@@ -884,7 +882,6 @@ $("btnCreateBom")?.addEventListener("click", async () => {
   }
 });
 
-// Update Lines (PIN)
 $("btnUpdateLines")?.addEventListener("click", async () => {
   try {
     if (!CURRENT_BOM_ID) return alert("Open BOM dulu dari Dashboard (Open)");
@@ -903,7 +900,6 @@ $("btnUpdateLines")?.addEventListener("click", async () => {
   }
 });
 
-// Export View/Print (NO PIN) -> viewer overlay
 $("btnExport")?.addEventListener("click", async () => {
   try {
     if (!CURRENT_BOM_ID) return alert("Open BOM dulu dari Dashboard (Open)");
@@ -914,7 +910,6 @@ $("btnExport")?.addEventListener("click", async () => {
   }
 });
 
-// Upload logo (PIN)
 $("btnUploadLogo")?.addEventListener("click", async () => {
   try {
     const f = $("logoFile").files[0];
@@ -937,7 +932,6 @@ $("btnUploadLogo")?.addEventListener("click", async () => {
   }
 });
 
-// Refresh buttons
 $("btnRefreshMaterials")?.addEventListener("click", async () => {
   await loadMaterials();
   renderMaterialsTable();
@@ -953,7 +947,6 @@ $("btnRefreshItems")?.addEventListener("click", async () => {
 });
 
 async function boot() {
-  // bikin viewer sejak awal biar stabil
   ensureViewerUI();
 
   await loadMaterials();
@@ -982,9 +975,9 @@ async function boot() {
 (async () => {
   try {
     await api("/api/materials");
-    await setLoggedUI(true);
+    setLoggedUI(true);
     await boot();
   } catch {
-    await setLoggedUI(false);
+    setLoggedUI(false);
   }
 })();
