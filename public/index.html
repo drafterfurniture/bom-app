@@ -8,7 +8,9 @@
 </head>
 <body>
   <div class="container">
-    <div class="nav">
+
+    <!-- NAV hanya untuk APP (akan di-hide saat belum login) -->
+    <div class="nav hidden" id="appNav">
       <div class="brand">
         <div class="b1">BOM App</div>
         <div class="b2">Cloudflare Pages + D1 + R2 (Light UI)</div>
@@ -271,7 +273,20 @@
       <div class="hr"></div>
       <pre class="log" id="log"></pre>
     </section>
+
   </div>
+
+  <!-- Fix: nav ikut hide/show bareng pageApp -->
+  <script>
+    (function () {
+      const orig = window.setLoggedUI;
+      window.setLoggedUI = async function(isLogged){
+        const nav = document.getElementById("appNav");
+        if (nav) nav.classList.toggle("hidden", !isLogged);
+        if (typeof orig === "function") return orig(isLogged);
+      };
+    })();
+  </script>
 
   <script src="/app.js"></script>
 </body>
