@@ -34,6 +34,50 @@ async function api(path, opts = {}) {
   return data;
 }
 
+// ====== Remember Me (ID only) ======
+const REMEMBER_KEY = "bom_remember_user";
+function rememberGet() {
+  try {
+    return localStorage.getItem(REMEMBER_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+function rememberSet(v) {
+  try {
+    localStorage.setItem(REMEMBER_KEY, v || "");
+  } catch {}
+}
+function rememberClear() {
+  try {
+    localStorage.removeItem(REMEMBER_KEY);
+  } catch {}
+}
+
+function applyRememberUI() {
+  const saved = rememberGet();
+  const userEl = $("loginUser");
+  const rememberEl = $("rememberMe") || $("loginRemember") || $("ingatSaya");
+  if (userEl && saved) userEl.value = saved;
+  if (rememberEl) rememberEl.checked = !!saved;
+}
+
+function bindLoginEnterToSubmit() {
+  const userEl = $("loginUser");
+  const passEl = $("loginPass");
+  const btn = $("btnLogin");
+
+  const handler = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      btn?.click();
+    }
+  };
+
+  userEl?.addEventListener("keydown", handler);
+  passEl?.addEventListener("keydown", handler);
+}
+
 async function ensurePin() {
   if (PIN_TOKEN) return PIN_TOKEN;
   const pin = prompt("Masukkan PIN untuk aksi sensitif:");
@@ -265,7 +309,6 @@ function ensureViewerUI() {
 function setIframeHtml(iframe, html) {
   if (!iframe) return;
 
-  // pastikan iframe sudah attach & punya contentWindow
   // srcdoc aman di modern browser
   try {
     iframe.srcdoc = html;
@@ -330,27 +373,46 @@ async function setLoggedUI(isLogged) {
   $("pageLogin")?.classList.toggle("hidden", isLogged);
   $("pageApp")?.classList.toggle("hidden", !isLogged);
   if ($("pillLogin")) $("pillLogin").textContent = isLogged ? "LOGIN OK" : "LOGOUT";
+
+  // saat logout, balikin fokus ke input login biar UX enak
+  if (!isLogged) {
+    setTimeout(() => $("loginUser")?.focus(), 50);
+  }
 }
 
-$("btnLogin").onclick = async () => {
+async function doLogin() {
+  const username = ($("loginUser")?.value || "").trim();
+  const password = ($("loginPass")?.value || "").trim();
+  if (!username || !password) throw new Error("ID dan password wajib diisi");
+
+  const rememberEl = $("rememberMe") || $("loginRemember") || $("ingatSaya");
+  const remember = !!rememberEl?.checked;
+
+  const r = await api("/api/login", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+
+  // simpan ID kalau user centang "ingat saya"
+  if (remember) rememberSet(username);
+  else rememberClear();
+
+  PIN_TOKEN = "";
+  log(r);
+  await setLoggedUI(true);
+  await boot();
+}
+
+$("btnLogin")?.addEventListener("click", async () => {
   try {
-    const username = $("loginUser").value.trim();
-    const password = $("loginPass").value.trim();
-    const r = await api("/api/login", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ username, password }),
-    });
-    PIN_TOKEN = "";
-    log(r);
-    await setLoggedUI(true);
-    await boot();
+    await doLogin();
   } catch (e) {
     alert(e.message);
   }
-};
+});
 
-$("btnLogout").onclick = async () => {
+$("btnLogout")?.addEventListener("click", async () => {
   try {
     await api("/api/logout", { method: "POST" });
     PIN_TOKEN = "";
@@ -359,9 +421,9 @@ $("btnLogout").onclick = async () => {
   } catch (e) {
     alert(e.message);
   }
-};
+});
 
-$("btnWhoami").onclick = async () => {
+$("btnWhoami")?.addEventListener("click", async () => {
   try {
     await api("/api/materials");
     alert("Login OK");
@@ -371,7 +433,7 @@ $("btnWhoami").onclick = async () => {
     alert("Belum login / session tidak ada");
     await setLoggedUI(false);
   }
-};
+});
 
 // ====== Load master data ======
 let MATERIALS = [];
@@ -551,7 +613,7 @@ function renderItemSelect() {
 }
 
 // ====== Save master records ======
-$("btnSaveMaterial").onclick = async () => {
+$("btnSaveMaterial")?.addEventListener("click", async () => {
   try {
     await ensurePin();
     const payload = {
@@ -576,9 +638,9 @@ $("btnSaveMaterial").onclick = async () => {
   } catch (e) {
     alert(e.message);
   }
-};
+});
 
-$("btnSaveAcc").onclick = async () => {
+$("btnSaveAcc")?.addEventListener("click", async () => {
   try {
     await ensurePin();
     const payload = {
@@ -599,9 +661,9 @@ $("btnSaveAcc").onclick = async () => {
   } catch (e) {
     alert(e.message);
   }
-};
+});
 
-$("btnSaveItem").onclick = async () => {
+$("btnSaveItem")?.addEventListener("click", async () => {
   try {
     await ensurePin();
     const payload = {
@@ -624,10 +686,10 @@ $("btnSaveItem").onclick = async () => {
   } catch (e) {
     alert(e.message);
   }
-};
+});
 
 // ====== Import materials CSV ======
-$("btnImportMaterials").onclick = async () => {
+$("btnImportMaterials")?.addEventListener("click", async () => {
   try {
     const f = $("csvFile").files[0];
     if (!f) return alert("Pilih file CSV dulu");
@@ -648,7 +710,7 @@ $("btnImportMaterials").onclick = async () => {
   } catch (e) {
     alert(e.message);
   }
-};
+});
 
 // ====== BOM Dashboard ======
 async function loadBoms() {
@@ -719,7 +781,7 @@ async function renderBoms() {
   if ($("bomsInfo")) $("bomsInfo").textContent = `${rows.length} BOM`;
 }
 
-$("btnRefreshBoms").onclick = () => renderBoms();
+$("btnRefreshBoms")?.addEventListener("click", () => renderBoms());
 
 // ====== BOM editor ======
 function makeMaterialOptions(selected = "") {
@@ -795,17 +857,17 @@ function renumberTable(tblId) {
   });
 }
 
-$("btnAddLine").onclick = () => addLineRow();
-$("btnAddAcc").onclick = () => addAccRow();
+$("btnAddLine")?.addEventListener("click", () => addLineRow());
+$("btnAddAcc")?.addEventListener("click", () => addAccRow());
 
-$("btnPin").onclick = async () => {
+$("btnPin")?.addEventListener("click", async () => {
   try {
     await ensurePin();
     alert("PIN OK (token siap dipakai 1x)");
   } catch (e) {
     alert(e.message);
   }
-};
+});
 
 let CURRENT_BOM_ID = null;
 
@@ -860,7 +922,7 @@ function collectAcc() {
 }
 
 // Create BOM (PIN)
-$("btnCreateBom").onclick = async () => {
+$("btnCreateBom")?.addEventListener("click", async () => {
   try {
     await ensurePin();
     const item_id = Number($("selItem").value);
@@ -878,10 +940,10 @@ $("btnCreateBom").onclick = async () => {
   } catch (e) {
     alert(e.message);
   }
-};
+});
 
 // Update Lines (PIN)
-$("btnUpdateLines").onclick = async () => {
+$("btnUpdateLines")?.addEventListener("click", async () => {
   try {
     if (!CURRENT_BOM_ID) return alert("Open BOM dulu dari Dashboard (Open)");
     await ensurePin();
@@ -897,11 +959,11 @@ $("btnUpdateLines").onclick = async () => {
   } catch (e) {
     alert(e.message);
   }
-};
+});
 
 // Export PDF/View (NO PIN) -> viewer overlay
 // NOTE: ini sekarang buka view clean, user klik Print kalau mau PDF
-$("btnExport").onclick = async () => {
+$("btnExport")?.addEventListener("click", async () => {
   try {
     if (!CURRENT_BOM_ID) return alert("Open BOM dulu dari Dashboard (Open)");
     const html = await fetchExportHtml(CURRENT_BOM_ID, "view");
@@ -909,10 +971,10 @@ $("btnExport").onclick = async () => {
   } catch (e) {
     alert(e.message);
   }
-};
+});
 
 // Upload logo (PIN)
-$("btnUploadLogo").onclick = async () => {
+$("btnUploadLogo")?.addEventListener("click", async () => {
   try {
     const f = $("logoFile").files[0];
     if (!f) return alert("Pilih file logo dulu");
@@ -932,22 +994,22 @@ $("btnUploadLogo").onclick = async () => {
   } catch (e) {
     alert(e.message);
   }
-};
+});
 
 // Refresh buttons
-$("btnRefreshMaterials").onclick = async () => {
+$("btnRefreshMaterials")?.addEventListener("click", async () => {
   await loadMaterials();
   renderMaterialsTable();
-};
-$("btnRefreshAccessories").onclick = async () => {
+});
+$("btnRefreshAccessories")?.addEventListener("click", async () => {
   await loadAccessories();
   renderAccessoriesTable();
-};
-$("btnRefreshItems").onclick = async () => {
+});
+$("btnRefreshItems")?.addEventListener("click", async () => {
   await loadItems();
   renderItemsTable();
   renderItemSelect();
-};
+});
 
 async function boot() {
   // bikin viewer sejak awal biar stabil
@@ -975,6 +1037,10 @@ async function boot() {
   if ($("currentBomInfo")) $("currentBomInfo").textContent = "Open BOM dari Dashboard untuk edit/export";
 }
 
+// ===== Init small UX =====
+applyRememberUI();
+bindLoginEnterToSubmit();
+
 // auto check session
 (async () => {
   try {
@@ -983,5 +1049,8 @@ async function boot() {
     await boot();
   } catch {
     await setLoggedUI(false);
+    // kalau belum login, fokus + isi remembered ID
+    applyRememberUI();
+    setTimeout(() => $("loginUser")?.focus(), 50);
   }
 })();
