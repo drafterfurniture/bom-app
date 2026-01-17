@@ -34,50 +34,6 @@ async function api(path, opts = {}) {
   return data;
 }
 
-// ====== Remember Me (ID only) ======
-const REMEMBER_KEY = "bom_remember_user";
-function rememberGet() {
-  try {
-    return localStorage.getItem(REMEMBER_KEY) || "";
-  } catch {
-    return "";
-  }
-}
-function rememberSet(v) {
-  try {
-    localStorage.setItem(REMEMBER_KEY, v || "");
-  } catch {}
-}
-function rememberClear() {
-  try {
-    localStorage.removeItem(REMEMBER_KEY);
-  } catch {}
-}
-
-function applyRememberUI() {
-  const saved = rememberGet();
-  const userEl = $("loginUser");
-  const rememberEl = $("rememberMe") || $("loginRemember") || $("ingatSaya");
-  if (userEl && saved) userEl.value = saved;
-  if (rememberEl) rememberEl.checked = !!saved;
-}
-
-function bindLoginEnterToSubmit() {
-  const userEl = $("loginUser");
-  const passEl = $("loginPass");
-  const btn = $("btnLogin");
-
-  const handler = (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      btn?.click();
-    }
-  };
-
-  userEl?.addEventListener("keydown", handler);
-  passEl?.addEventListener("keydown", handler);
-}
-
 async function ensurePin() {
   if (PIN_TOKEN) return PIN_TOKEN;
   const pin = prompt("Masukkan PIN untuk aksi sensitif:");
@@ -104,7 +60,7 @@ async function fetchExportHtml(bomId, mode = "view") {
   const res = await fetch("/api/export-pdf", {
     method: "POST",
     headers: { "content-type": "application/json" }, // TANPA x-pin-token
-    body: JSON.stringify({ bom_id: Number(bomId), mode }), // <-- penting
+    body: JSON.stringify({ bom_id: Number(bomId), mode }),
   });
 
   if (!res.ok) {
@@ -117,6 +73,19 @@ async function fetchExportHtml(bomId, mode = "view") {
   }
 
   return await res.text();
+}
+
+// ====== Logged UI (pakai wrapper appWrap) ======
+// index.html kamu sudah inject window.setLoggedUI.
+// Di sini kita PAKAI itu, dan kalau belum ada, fallback.
+async function setLoggedUI(isLogged) {
+  if (typeof window.setLoggedUI === "function") {
+    return window.setLoggedUI(isLogged);
+  }
+  // fallback (kalau index.html belum dipakai)
+  $("pageLogin")?.classList.toggle("hidden", isLogged);
+  $("pageApp")?.classList.toggle("hidden", !isLogged);
+  if ($("pillLogin")) $("pillLogin").textContent = isLogged ? "LOGIN OK" : "LOGOUT";
 }
 
 // ====== VIEWER (same window) ======
@@ -309,12 +278,11 @@ function ensureViewerUI() {
 function setIframeHtml(iframe, html) {
   if (!iframe) return;
 
-  // srcdoc aman di modern browser
   try {
-    iframe.srcdoc = html;
+    iframe.srcdoc = html; // utama
     return;
   } catch {
-    // fallback ke write()
+    // fallback
   }
 
   try {
@@ -344,7 +312,6 @@ function hideViewer() {
   v.wrap.style.display = "none";
   document.body.style.overflow = "";
 
-  // bersihin konten biar ringan
   try {
     v.iframe.srcdoc = "";
   } catch {
@@ -369,44 +336,19 @@ document.querySelectorAll(".tab").forEach((t) => {
 });
 
 // ====== Login / Logout ======
-async function setLoggedUI(isLogged) {
-  $("pageLogin")?.classList.toggle("hidden", isLogged);
-  $("pageApp")?.classList.toggle("hidden", !isLogged);
-  if ($("pillLogin")) $("pillLogin").textContent = isLogged ? "LOGIN OK" : "LOGOUT";
-
-  // saat logout, balikin fokus ke input login biar UX enak
-  if (!isLogged) {
-    setTimeout(() => $("loginUser")?.focus(), 50);
-  }
-}
-
-async function doLogin() {
-  const username = ($("loginUser")?.value || "").trim();
-  const password = ($("loginPass")?.value || "").trim();
-  if (!username || !password) throw new Error("ID dan password wajib diisi");
-
-  const rememberEl = $("rememberMe") || $("loginRemember") || $("ingatSaya");
-  const remember = !!rememberEl?.checked;
-
-  const r = await api("/api/login", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ username, password }),
-  });
-
-  // simpan ID kalau user centang "ingat saya"
-  if (remember) rememberSet(username);
-  else rememberClear();
-
-  PIN_TOKEN = "";
-  log(r);
-  await setLoggedUI(true);
-  await boot();
-}
-
 $("btnLogin")?.addEventListener("click", async () => {
   try {
-    await doLogin();
+    const username = $("loginUser").value.trim();
+    const password = $("loginPass").value.trim();
+    const r = await api("/api/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    PIN_TOKEN = "";
+    log(r);
+    await setLoggedUI(true);
+    await boot();
   } catch (e) {
     alert(e.message);
   }
@@ -429,7 +371,7 @@ $("btnWhoami")?.addEventListener("click", async () => {
     alert("Login OK");
     await setLoggedUI(true);
     await boot();
-  } catch (e) {
+  } catch {
     alert("Belum login / session tidak ada");
     await setLoggedUI(false);
   }
@@ -961,8 +903,7 @@ $("btnUpdateLines")?.addEventListener("click", async () => {
   }
 });
 
-// Export PDF/View (NO PIN) -> viewer overlay
-// NOTE: ini sekarang buka view clean, user klik Print kalau mau PDF
+// Export View/Print (NO PIN) -> viewer overlay
 $("btnExport")?.addEventListener("click", async () => {
   try {
     if (!CURRENT_BOM_ID) return alert("Open BOM dulu dari Dashboard (Open)");
@@ -1037,10 +978,6 @@ async function boot() {
   if ($("currentBomInfo")) $("currentBomInfo").textContent = "Open BOM dari Dashboard untuk edit/export";
 }
 
-// ===== Init small UX =====
-applyRememberUI();
-bindLoginEnterToSubmit();
-
 // auto check session
 (async () => {
   try {
@@ -1049,8 +986,5 @@ bindLoginEnterToSubmit();
     await boot();
   } catch {
     await setLoggedUI(false);
-    // kalau belum login, fokus + isi remembered ID
-    applyRememberUI();
-    setTimeout(() => $("loginUser")?.focus(), 50);
   }
 })();
