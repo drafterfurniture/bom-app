@@ -9,19 +9,6 @@
 <body>
   <div class="container">
 
-    <!-- NAV hanya untuk APP (akan di-hide saat belum login) -->
-    <div class="nav hidden" id="appNav">
-      <div class="brand">
-        <div class="b1">BOM App</div>
-        <div class="b2">Cloudflare Pages + D1 + R2 (Light UI)</div>
-      </div>
-
-      <div class="navRight">
-        <span class="pill" id="pillLogin">LOGOUT</span>
-        <button class="btn" id="btnLogout">Logout</button>
-      </div>
-    </div>
-
     <!-- LOGIN -->
     <section class="loginWrap" id="pageLogin">
       <div class="loginCard">
@@ -61,230 +48,254 @@
       </div>
     </section>
 
-    <!-- APP -->
-    <section class="card hidden" id="pageApp">
-      <div class="tabs">
-        <button class="tab active" data-tab="dashboard">Dashboard</button>
-        <button class="tab" data-tab="bom">BOM</button>
-        <button class="tab" data-tab="materials">Materials</button>
-        <button class="tab" data-tab="accessories">Aksesoris</button>
-        <button class="tab" data-tab="items">Items</button>
-      </div>
+    <!-- APP WRAPPER (SEMUA menu/dashboard ada di sini) -->
+    <section class="hidden" id="appWrap">
 
-      <!-- DASHBOARD -->
-      <div class="tabPane" id="tab-dashboard">
-        <div class="headerRow">
-          <h2>Dashboard BOM</h2>
-          <button class="btn" id="btnRefreshBoms">Refresh</button>
+      <div class="nav">
+        <div class="brand">
+          <div class="b1">BOM App</div>
+          <div class="b2">Cloudflare Pages + D1 + R2 (Light UI)</div>
         </div>
 
-        <table class="table" id="tblBoms">
-          <thead>
-            <tr>
-              <th>BOM Code</th>
-              <th>Item</th>
-              <th>Buyer</th>
-              <th>Tanggal</th>
-              <th>Aksi</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-        <div class="muted small" id="bomsInfo"></div>
+        <div class="navRight">
+          <span class="pill" id="pillLogin">LOGOUT</span>
+          <button class="btn" id="btnLogout">Logout</button>
+        </div>
       </div>
 
-      <!-- BOM -->
-      <div class="tabPane hidden" id="tab-bom">
-        <div class="headerRow">
-          <h2>Buat / Edit BOM</h2>
+      <!-- APP -->
+      <section class="card" id="pageApp">
+        <div class="tabs">
+          <button class="tab active" data-tab="dashboard">Dashboard</button>
+          <button class="tab" data-tab="bom">BOM</button>
+          <button class="tab" data-tab="materials">Materials</button>
+          <button class="tab" data-tab="accessories">Aksesoris</button>
+          <button class="tab" data-tab="items">Items</button>
+        </div>
+
+        <!-- DASHBOARD -->
+        <div class="tabPane" id="tab-dashboard">
+          <div class="headerRow">
+            <h2>Dashboard BOM</h2>
+            <button class="btn" id="btnRefreshBoms">Refresh</button>
+          </div>
+
+          <table class="table" id="tblBoms">
+            <thead>
+              <tr>
+                <th>BOM Code</th>
+                <th>Item</th>
+                <th>Buyer</th>
+                <th>Tanggal</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <div class="muted small" id="bomsInfo"></div>
+        </div>
+
+        <!-- BOM -->
+        <div class="tabPane hidden" id="tab-bom">
+          <div class="headerRow">
+            <h2>Buat / Edit BOM</h2>
+            <div class="rowBtns">
+              <button class="btn" id="btnPin">Minta PIN</button>
+              <button class="btn primary" id="btnCreateBom">Create BOM</button>
+              <button class="btn" id="btnUpdateLines">Update Lines</button>
+              <button class="btn" id="btnExport">View / Print</button>
+            </div>
+          </div>
+
+          <div class="grid2">
+            <div>
+              <label>Pilih Item</label>
+              <select class="input" id="selItem"></select>
+              <div class="muted small" id="itemInfo"></div>
+            </div>
+            <div>
+              <label>BOM yang sedang dibuka</label>
+              <input class="input" id="currentBomId" placeholder="(auto)" disabled />
+              <div class="muted small" id="currentBomInfo"></div>
+            </div>
+          </div>
+
+          <div class="hr"></div>
+
+          <h3>Lines (Material)</h3>
+          <table class="table" id="tblLines">
+            <thead>
+              <tr>
+                <th style="width:60px">No</th>
+                <th>Nama Komponen</th>
+                <th style="width:260px">Material</th>
+                <th style="width:80px">Qty</th>
+                <th style="width:140px">Panjang (mm)</th>
+                <th style="width:90px">Aksi</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <button class="btn" id="btnAddLine">+ Tambah Line</button>
+
+          <div class="hr"></div>
+
+          <h3>Aksesoris</h3>
+          <table class="table" id="tblAcc">
+            <thead>
+              <tr>
+                <th style="width:60px">No</th>
+                <th style="width:260px">Aksesoris</th>
+                <th style="width:120px">Qty</th>
+                <th style="width:90px">Aksi</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <button class="btn" id="btnAddAcc">+ Tambah Aksesoris</button>
+
+          <div class="hr"></div>
+
+          <h3>Logo (R2)</h3>
+          <div class="grid2">
+            <div>
+              <label>Upload Logo</label>
+              <input class="input" id="logoFile" type="file" accept="image/*" />
+              <div class="muted small">Butuh PIN. Disimpan ke R2 bucket.</div>
+            </div>
+            <div class="rowBtns" style="align-items:end">
+              <button class="btn primary" id="btnUploadLogo">Upload</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- MATERIALS -->
+        <div class="tabPane hidden" id="tab-materials">
+          <div class="headerRow">
+            <h2>Database Material</h2>
+            <div class="rowBtns">
+              <button class="btn" id="btnRefreshMaterials">Refresh</button>
+              <button class="btn" id="btnImportMaterials">Import CSV</button>
+              <input class="input" id="csvFile" type="file" accept=".csv" />
+            </div>
+          </div>
+
+          <div class="grid3">
+            <div>
+              <label>Kode</label>
+              <input class="input" id="mKode" placeholder="M01020" />
+            </div>
+            <div>
+              <label>Jenis</label>
+              <select class="input" id="mJenis">
+                <option>Aluminium</option>
+                <option>Besi</option>
+                <option>Stainless</option>
+              </select>
+            </div>
+            <div>
+              <label>Las (cm)</label>
+              <input class="input" id="mLas" type="number" step="0.01" />
+            </div>
+            <div>
+              <label>Berat/M</label>
+              <input class="input" id="mBerat" type="number" step="0.0001" />
+            </div>
+            <div>
+              <label>Luas/M</label>
+              <input class="input" id="mLuas" type="number" step="0.0001" />
+            </div>
+            <div>
+              <label>Deskripsi</label>
+              <input class="input" id="mDesc" placeholder="Aluminium Hollow..." />
+            </div>
+          </div>
+
           <div class="rowBtns">
-            <button class="btn" id="btnPin">Minta PIN</button>
-            <button class="btn primary" id="btnCreateBom">Create BOM</button>
-            <button class="btn" id="btnUpdateLines">Update Lines</button>
-            <button class="btn" id="btnExport">View / Print</button>
+            <button class="btn primary" id="btnSaveMaterial">Save (Create/Update)</button>
           </div>
+
+          <table class="table" id="tblMaterials">
+            <thead>
+              <tr>
+                <th>Kode</th><th>Jenis</th><th>Deskripsi</th><th>Berat/M</th><th>Luas/M</th><th>Las</th><th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+
+          <div class="muted small">Create/Update/Delete/Import butuh PIN.</div>
         </div>
 
-        <div class="grid2">
-          <div>
-            <label>Pilih Item</label>
-            <select class="input" id="selItem"></select>
-            <div class="muted small" id="itemInfo"></div>
+        <!-- ACCESSORIES -->
+        <div class="tabPane hidden" id="tab-accessories">
+          <div class="headerRow">
+            <h2>Database Aksesoris</h2>
+            <button class="btn" id="btnRefreshAccessories">Refresh</button>
           </div>
-          <div>
-            <label>BOM yang sedang dibuka</label>
-            <input class="input" id="currentBomId" placeholder="(auto)" disabled />
-            <div class="muted small" id="currentBomInfo"></div>
+
+          <div class="grid3">
+            <div><label>Kode</label><input class="input" id="aKode" placeholder="ACC-M6" /></div>
+            <div><label>Nama</label><input class="input" id="aNama" placeholder="Adjuster M6" /></div>
+            <div><label>Satuan</label><input class="input" id="aSatuan" placeholder="Pcs" /></div>
           </div>
-        </div>
-
-        <div class="hr"></div>
-
-        <h3>Lines (Material)</h3>
-        <table class="table" id="tblLines">
-          <thead>
-            <tr>
-              <th style="width:60px">No</th>
-              <th>Nama Komponen</th>
-              <th style="width:260px">Material</th>
-              <th style="width:80px">Qty</th>
-              <th style="width:140px">Panjang (mm)</th>
-              <th style="width:90px">Aksi</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-        <button class="btn" id="btnAddLine">+ Tambah Line</button>
-
-        <div class="hr"></div>
-
-        <h3>Aksesoris</h3>
-        <table class="table" id="tblAcc">
-          <thead>
-            <tr>
-              <th style="width:60px">No</th>
-              <th style="width:260px">Aksesoris</th>
-              <th style="width:120px">Qty</th>
-              <th style="width:90px">Aksi</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-        <button class="btn" id="btnAddAcc">+ Tambah Aksesoris</button>
-
-        <div class="hr"></div>
-
-        <h3>Logo (R2)</h3>
-        <div class="grid2">
-          <div>
-            <label>Upload Logo</label>
-            <input class="input" id="logoFile" type="file" accept="image/*" />
-            <div class="muted small">Butuh PIN. Disimpan ke R2 bucket.</div>
-          </div>
-          <div class="rowBtns" style="align-items:end">
-            <button class="btn primary" id="btnUploadLogo">Upload</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- MATERIALS -->
-      <div class="tabPane hidden" id="tab-materials">
-        <div class="headerRow">
-          <h2>Database Material</h2>
           <div class="rowBtns">
-            <button class="btn" id="btnRefreshMaterials">Refresh</button>
-            <button class="btn" id="btnImportMaterials">Import CSV</button>
-            <input class="input" id="csvFile" type="file" accept=".csv" />
+            <button class="btn primary" id="btnSaveAcc">Save (Create/Update)</button>
           </div>
+
+          <table class="table" id="tblAccessories">
+            <thead><tr><th>Kode</th><th>Nama</th><th>Satuan</th><th>Aksi</th></tr></thead>
+            <tbody></tbody>
+          </table>
         </div>
 
-        <div class="grid3">
-          <div>
-            <label>Kode</label>
-            <input class="input" id="mKode" placeholder="M01020" />
+        <!-- ITEMS -->
+        <div class="tabPane hidden" id="tab-items">
+          <div class="headerRow">
+            <h2>Database Item</h2>
+            <button class="btn" id="btnRefreshItems">Refresh</button>
           </div>
-          <div>
-            <label>Jenis</label>
-            <select class="input" id="mJenis">
-              <option>Aluminium</option>
-              <option>Besi</option>
-              <option>Stainless</option>
-            </select>
+
+          <div class="grid4">
+            <div><label>Kode</label><input class="input" id="iKode" placeholder="SDN-CS" /></div>
+            <div><label>Nama</label><input class="input" id="iNama" placeholder="Sedona Counter Stool" /></div>
+            <div><label>Dimensi</label><input class="input" id="iDimensi" placeholder="500x500x800mm" /></div>
+            <div><label>Buyer</label><input class="input" id="iBuyer" placeholder="DANAO" /></div>
           </div>
-          <div>
-            <label>Las (cm)</label>
-            <input class="input" id="mLas" type="number" step="0.01" />
+          <div class="rowBtns">
+            <button class="btn primary" id="btnSaveItem">Save (Create/Update)</button>
           </div>
-          <div>
-            <label>Berat/M</label>
-            <input class="input" id="mBerat" type="number" step="0.0001" />
-          </div>
-          <div>
-            <label>Luas/M</label>
-            <input class="input" id="mLuas" type="number" step="0.0001" />
-          </div>
-          <div>
-            <label>Deskripsi</label>
-            <input class="input" id="mDesc" placeholder="Aluminium Hollow..." />
-          </div>
+
+          <table class="table" id="tblItems">
+            <thead><tr><th>ID</th><th>Kode</th><th>Nama</th><th>Dimensi</th><th>Buyer</th><th>Aksi</th></tr></thead>
+            <tbody></tbody>
+          </table>
         </div>
 
-        <div class="rowBtns">
-          <button class="btn primary" id="btnSaveMaterial">Save (Create/Update)</button>
-        </div>
+        <div class="hr"></div>
+        <pre class="log" id="log"></pre>
+      </section>
 
-        <table class="table" id="tblMaterials">
-          <thead>
-            <tr>
-              <th>Kode</th><th>Jenis</th><th>Deskripsi</th><th>Berat/M</th><th>Luas/M</th><th>Las</th><th>Aksi</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-
-        <div class="muted small">Create/Update/Delete/Import butuh PIN.</div>
-      </div>
-
-      <!-- ACCESSORIES -->
-      <div class="tabPane hidden" id="tab-accessories">
-        <div class="headerRow">
-          <h2>Database Aksesoris</h2>
-          <button class="btn" id="btnRefreshAccessories">Refresh</button>
-        </div>
-
-        <div class="grid3">
-          <div><label>Kode</label><input class="input" id="aKode" placeholder="ACC-M6" /></div>
-          <div><label>Nama</label><input class="input" id="aNama" placeholder="Adjuster M6" /></div>
-          <div><label>Satuan</label><input class="input" id="aSatuan" placeholder="Pcs" /></div>
-        </div>
-        <div class="rowBtns">
-          <button class="btn primary" id="btnSaveAcc">Save (Create/Update)</button>
-        </div>
-
-        <table class="table" id="tblAccessories">
-          <thead><tr><th>Kode</th><th>Nama</th><th>Satuan</th><th>Aksi</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-
-      <!-- ITEMS -->
-      <div class="tabPane hidden" id="tab-items">
-        <div class="headerRow">
-          <h2>Database Item</h2>
-          <button class="btn" id="btnRefreshItems">Refresh</button>
-        </div>
-
-        <div class="grid4">
-          <div><label>Kode</label><input class="input" id="iKode" placeholder="SDN-CS" /></div>
-          <div><label>Nama</label><input class="input" id="iNama" placeholder="Sedona Counter Stool" /></div>
-          <div><label>Dimensi</label><input class="input" id="iDimensi" placeholder="500x500x800mm" /></div>
-          <div><label>Buyer</label><input class="input" id="iBuyer" placeholder="DANAO" /></div>
-        </div>
-        <div class="rowBtns">
-          <button class="btn primary" id="btnSaveItem">Save (Create/Update)</button>
-        </div>
-
-        <table class="table" id="tblItems">
-          <thead><tr><th>ID</th><th>Kode</th><th>Nama</th><th>Dimensi</th><th>Buyer</th><th>Aksi</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-
-      <div class="hr"></div>
-      <pre class="log" id="log"></pre>
     </section>
-
   </div>
 
-  <!-- Fix: nav ikut hide/show bareng pageApp -->
   <script>
+    // setLoggedUI wrapper: login <-> appWrap
     (function () {
-      const orig = window.setLoggedUI;
+      function toggleApp(isLogged){
+        document.getElementById("pageLogin")?.classList.toggle("hidden", isLogged);
+        document.getElementById("appWrap")?.classList.toggle("hidden", !isLogged);
+      }
+
+      // override/set global helper biar app.js kamu tetap jalan
       window.setLoggedUI = async function(isLogged){
-        const nav = document.getElementById("appNav");
-        if (nav) nav.classList.toggle("hidden", !isLogged);
-        if (typeof orig === "function") return orig(isLogged);
+        toggleApp(isLogged);
+        const pill = document.getElementById("pillLogin");
+        if (pill) pill.textContent = isLogged ? "LOGIN OK" : "LOGOUT";
       };
+
+      // default state (biar ga kedip)
+      toggleApp(false);
     })();
   </script>
 
